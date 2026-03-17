@@ -37,7 +37,7 @@ from utils import print_timestamp
 WINDOWS   = ["06-08", "10-12", "14-16"]
 TISSUES   = ["Neuroblasts", "Neurons", "Glia"]
 N_SPLITS  = 10
-RF_PARAMS = dict(n_estimators=300, random_state=0, n_jobs=-1)
+RF_PARAMS = dict(n_estimators=500, random_state=0, n_jobs=-1)
 
 
 # ---------------------------------------------------------------------------
