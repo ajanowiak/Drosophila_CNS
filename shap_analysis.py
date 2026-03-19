@@ -145,7 +145,8 @@ def shap_analysis_with_beeswarm(
 
 def main():
     tissues = ["Neuroblasts", "Neurons", "Glia"]
-    models = ['RF', 'XGB', 'LR', 'SVM'] 
+    # models = ['RF', 'XGB', 'LR', 'SVM'] 
+    models = ['RF', 'XGB'] 
     annot_path = "data/motif_names.tsv"
 
 
