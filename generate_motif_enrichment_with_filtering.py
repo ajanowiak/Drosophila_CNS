@@ -1,5 +1,8 @@
 # generate_motif_enrichment_with_filtering.py
 
+# TRZEBA POPRAWIĆ TEN SKRYPT ŻEBY ZAPISYWAŁ TEŻ UNFILTERED!!!
+# (w całości, tak jak wcześniej - nie tylko pojedyncze tkanki)
+
 import os
 import argparse
 import numpy as np
