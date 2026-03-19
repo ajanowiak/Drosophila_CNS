@@ -1,20 +1,18 @@
 # train_time_agnostic.py
 
-# train_motif_enrichment.py
-#
 # Trains time-agnostic Random Forest classifiers using the motif enrichment
 # difference matrix as features (neural_labels or unfiltered, controlled by --filter_labels).
 #
 # Key differences from train.ipynb:
-#   - Features: motif enrichment difference matrix (neural or unfiltered), NOT data_diff
+#   - Features: motif enrichment matrix (neural or unfiltered)
 #   - Missing loops (rows with any NaN) are dropped before training
 #   - Only Random Forest, only time-agnostic models
 #   - Tissues are processed in parallel (ProcessPoolExecutor)
 #   - Records mean CV AUCROC to a summary CSV for later comparison
 #
 # Usage:
-#   python train_motif_enrichment.py --filter_labels True   # neural_labels features
-#   python train_motif_enrichment.py --filter_labels False  # unfiltered features
+#   python3 train_time_agnostic.py --filter_labels True   # neural_labels features
+#   python3 train_time_agnostic.py --filter_labels False  # unfiltered features
 
 import os
 import argparse
