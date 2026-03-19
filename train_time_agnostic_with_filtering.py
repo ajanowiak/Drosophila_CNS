@@ -106,6 +106,9 @@ def compose_windows_enrichment(
     Concatenate enrichment matrices across windows for a given annotation,
     align with tissue labels, filter by cell count threshold,
     drop NaN rows, and build a composite stratification vector.
+    
+    Handles missing annotations in some windows gracefully. Returns data only from
+    windows where the annotation is available.
 
     Args:
         tissue: tissue label, e.g. "Neuroblasts"
@@ -117,6 +120,7 @@ def compose_windows_enrichment(
         X (pd.DataFrame), y (pd.Series), composite (np.ndarray of codes), n_loops dict
     """
     Xs, ys, n_loops_dict = [], [], {}
+    available_windows_idx = []
 
     for idx, w in enumerate(WINDOWS):
         feature_dir = f"results/training_data/{label_tag}/hrs{w}"
@@ -124,12 +128,25 @@ def compose_windows_enrichment(
         count_path = os.path.join(feature_dir, f"count11_all_tissues_hrs{w}.csv")
         y_path = os.path.join(feature_dir, f"y_{tissue}.csv")
 
+        # Check if all required files exist for this window
         if not os.path.exists(enrich_path):
-            raise FileNotFoundError(f"Enrichment file not found: {enrich_path}")
+            print_timestamp(
+                f"    hrs{w}: enrichment not found (annotation missing in this window)"
+            )
+            n_loops_dict[w] = 0
+            continue
         if not os.path.exists(count_path):
-            raise FileNotFoundError(f"Count file not found: {count_path}")
+            print_timestamp(
+                f"    hrs{w}: count file not found, skipping window"
+            )
+            n_loops_dict[w] = 0
+            continue
         if not os.path.exists(y_path):
-            raise FileNotFoundError(f"Label file not found: {y_path}")
+            print_timestamp(
+                f"    hrs{w}: label file not found, skipping window"
+            )
+            n_loops_dict[w] = 0
+            continue
 
         X_w = pd.read_csv(enrich_path, index_col=0)
         count_w = pd.read_csv(count_path, index_col=0)
@@ -145,6 +162,12 @@ def compose_windows_enrichment(
         X_w_filt, n_passing = filter_loops_by_threshold(X_w, count_w, cells_threshold)
         n_loops_dict[w] = n_passing
 
+        if n_passing == 0:
+            print_timestamp(
+                f"    hrs{w}: no loops passed threshold (n_loops=0), skipping window"
+            )
+            continue
+
         # Align label with filtered loops
         y_w = y_w.loc[X_w_filt.index]
 
@@ -154,19 +177,28 @@ def compose_windows_enrichment(
         after = len(X_w_filt)
         if before != after:
             print_timestamp(
-                f"  [{tissue}] [annotation={annotation}] hrs{w}: "
-                f"dropped {before - after} loops with NaN features ({after} remaining)"
+                f"    hrs{w}: dropped {before - after} loops with NaN features ({after} remaining)"
             )
+        
         y_w = y_w.loc[X_w_filt.index]
 
         # Tag with window index for stratification
-        X_w_filt["_window"] = idx
+        X_w_filt["_window"] = len(Xs)  # Relative window index in available windows
         Xs.append(X_w_filt)
         ys.append(y_w)
+        available_windows_idx.append(idx)
+
+    # Check if at least one window has data
+    if len(Xs) == 0:
+        raise ValueError(
+            f"No windows available for {annotation}/{tissue} "
+            "(all windows missing or failed threshold filter)"
+        )
 
     X = pd.concat(Xs, axis=0)
     y = pd.concat(ys, axis=0)
 
+    # Build composite stratification vector from available windows
     composite = pd.Categorical(list(zip(X["_window"], y))).codes
     X = X.drop(columns=["_window"])
 
@@ -187,22 +219,41 @@ def train_tissue(
 ) -> dict:
     """
     Cross-validated time-agnostic RF training for one tissue using a specific annotation's enrichment.
+    
+    Handles annotations that are missing in some windows. Trains on available windows only.
 
-    Returns a dict with tissue name, annotation, metrics, and n_loops per window.
+    Returns a dict with tissue name, annotation, metrics, n_loops per window, and status info.
     """
-    print_timestamp(f"[{annotation}] [{tissue}] Starting training...")
+    print_timestamp(f"  [{annotation}] [{tissue}] Checking available windows...")
 
     try:
         X, y, composite, n_loops_dict = compose_windows_enrichment(
             tissue, annotation, cells_threshold, label_tag
         )
-    except FileNotFoundError as e:
-        print_timestamp(f"[{annotation}] [{tissue}] SKIPPED: {e}")
-        return None
+    except ValueError as e:
+        print_timestamp(
+            f"  [{annotation}] [{tissue}] SKIPPED: {e}"
+        )
+        return {
+            "tissue": tissue,
+            "annotation": annotation,
+            "status": "SKIPPED",
+            "reason": str(e),
+            "mean_auc": None,
+            "std_auc": None,
+            "mean_acc": None,
+            "std_acc": None,
+            "n_loops_06-08": n_loops_dict.get("06-08", 0) if 'n_loops_dict' in locals() else 0,
+            "n_loops_10-12": n_loops_dict.get("10-12", 0) if 'n_loops_dict' in locals() else 0,
+            "n_loops_14-16": n_loops_dict.get("14-16", 0) if 'n_loops_dict' in locals() else 0,
+            "n_available_windows": 0,
+        }
 
+    n_available_windows = sum(1 for n in n_loops_dict.values() if n > 0)
+    
     print_timestamp(
-        f"[{annotation}] [{tissue}] Data shape after threshold+NaN drop: {X.shape}, "
-        f"positives: {y.sum()}"
+        f"  [{annotation}] [{tissue}] Data shape after threshold+NaN drop: {X.shape}, "
+        f"positives: {y.sum()}, available windows: {n_available_windows}/3"
     )
 
     classifier = RandomForestClassifier(**params)
@@ -246,13 +297,15 @@ def train_tissue(
     pickle.dump(all_clf, open(all_path, "wb"))
 
     print_timestamp(
-        f"[{annotation}] [{tissue}] Done - mean AUC={mean_auc:.4f} ± {std_auc:.4f}, "
-        f"mean Acc={mean_acc:.4f} ± {std_acc:.4f}"
+        f"  [{annotation}] [{tissue}] Done (windows {n_available_windows}/3) - "
+        f"AUC={mean_auc:.4f} ± {std_auc:.4f}, Acc={mean_acc:.4f} ± {std_acc:.4f}"
     )
 
     return {
         "tissue": tissue,
         "annotation": annotation,
+        "status": "TRAINED",
+        "reason": None,
         "mean_auc": mean_auc,
         "std_auc": std_auc,
         "mean_acc": mean_acc,
@@ -260,6 +313,7 @@ def train_tissue(
         "n_loops_06-08": n_loops_dict["06-08"],
         "n_loops_10-12": n_loops_dict["10-12"],
         "n_loops_14-16": n_loops_dict["14-16"],
+        "n_available_windows": n_available_windows,
     }
 
 
@@ -285,13 +339,16 @@ def main():
         print_timestamp("ERROR: No annotation directories found. Make sure generate_motif_enrichment_with_filtering.py has been run.")
         return
 
-    print_timestamp(f"Found {len(annotations)} annotations to train on")
+    print_timestamp(f"Found {len(annotations)} annotations to train on: {', '.join(annotations)}\n")
 
-    # For each annotation, train classifiers for all tissues
-    all_results = {}
+    # Collect all results for logging
+    all_training_logs = []
     
-    for annotation in annotations:
-        print_timestamp(f"\n=== Processing annotation: {annotation} ===")
+    # For each annotation, train classifiers for all tissues
+    all_summary_dfs = {}
+    
+    for annotation_idx, annotation in enumerate(annotations, 1):
+        print_timestamp(f"\n[{annotation_idx}/{len(annotations)}] Processing annotation: {annotation}")
         
         results = {}
         with ProcessPoolExecutor(max_workers=len(TISSUES)) as executor:
@@ -307,39 +364,85 @@ def main():
                     result = fut.result()
                     if result is not None:
                         results[t] = result
+                        all_training_logs.append(result)
                 except Exception as e:
-                    print_timestamp(f"[{annotation}] [{t}] FAILED: {e}")
+                    print_timestamp(f"  [{annotation}] [{t}] FAILED with exception: {e}")
+                    all_training_logs.append({
+                        "tissue": t,
+                        "annotation": annotation,
+                        "status": "FAILED",
+                        "reason": str(e),
+                        "mean_auc": None,
+                        "std_auc": None,
+                        "mean_acc": None,
+                        "std_acc": None,
+                        "n_loops_06-08": 0,
+                        "n_loops_10-12": 0,
+                        "n_loops_14-16": 0,
+                        "n_available_windows": 0,
+                    })
                     raise
 
-        # --- Summary table per annotation ---
+        # --- Summary metrics table for this annotation ---
         rows = []
         for t in TISSUES:
             if t not in results:
                 continue
             r = results[t]
-            rows.append({
-                "tissue": r["tissue"],
-                "mean_auc": round(r["mean_auc"], 6),
-                "std_auc": round(r["std_auc"], 6),
-                "mean_acc": round(r["mean_acc"], 6),
-                "std_acc": round(r["std_acc"], 6),
-                "n_loops_06-08": r["n_loops_06-08"],
-                "n_loops_10-12": r["n_loops_10-12"],
-                "n_loops_14-16": r["n_loops_14-16"],
-            })
+            
+            # Only add to metrics table if trained
+            if r["status"] == "TRAINED":
+                rows.append({
+                    "tissue": r["tissue"],
+                    "mean_auc": round(r["mean_auc"], 6),
+                    "std_auc": round(r["std_auc"], 6),
+                    "mean_acc": round(r["mean_acc"], 6),
+                    "std_acc": round(r["std_acc"], 6),
+                    "n_loops_06-08": r["n_loops_06-08"],
+                    "n_loops_10-12": r["n_loops_10-12"],
+                    "n_loops_14-16": r["n_loops_14-16"],
+                    "n_available_windows": r["n_available_windows"],
+                })
 
-        summary_df = pd.DataFrame(rows)
-        summary_dir = f"results/time_agnostic_with_filtering"
-        os.makedirs(summary_dir, exist_ok=True)
-        summary_path = os.path.join(summary_dir, f"{annotation}_cv_aucroc_summary_RF_threshold{args.cells_threshold}.csv")
-        summary_df.to_csv(summary_path, index=False)
-        print_timestamp(f"Summary table for {annotation} saved to {summary_path}")
+        if rows:  # Only save if there are trained results
+            summary_df = pd.DataFrame(rows)
+            summary_dir = f"results/time_agnostic_with_filtering/refined_annotations"
+            os.makedirs(summary_dir, exist_ok=True)
+            summary_path = os.path.join(
+                summary_dir, f"{annotation}_cv_aucroc_summary_RF_threshold{args.cells_threshold}.csv"
+            )
+            summary_df.to_csv(summary_path, index=False)
+            print_timestamp(f"  Summary table for {annotation} saved to {summary_path}")
+            print("\n" + summary_df.to_string(index=False))
+            all_summary_dfs[annotation] = summary_df
+        else:
+            print_timestamp(f"  No trained results for annotation {annotation}")
 
-        print("\n" + summary_df.to_string(index=False))
-        
-        all_results[annotation] = summary_df
+    # --- Save detailed training log ---
+    log_df = pd.DataFrame(all_training_logs)
+    log_dir = f"results/time_agnostic_with_filtering/logs"
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f"training_log_threshold{args.cells_threshold}.csv")
+    log_df.to_csv(log_path, index=False)
+    print_timestamp(f"\nDetailed training log saved to {log_path}")
 
-    print_timestamp("\n=== All annotations done ===")
+    # --- Summary statistics ---
+    print_timestamp("\n=== Training Summary ===")
+    n_trained = len([x for x in all_training_logs if x["status"] == "TRAINED"])
+    n_skipped = len([x for x in all_training_logs if x["status"] == "SKIPPED"])
+    n_failed = len([x for x in all_training_logs if x["status"] == "FAILED"])
+    print_timestamp(f"Total runs: {len(all_training_logs)}")
+    print_timestamp(f"  Trained: {n_trained}")
+    print_timestamp(f"  Skipped: {n_skipped}")
+    print_timestamp(f"  Failed: {n_failed}")
+
+    if n_skipped > 0:
+        print_timestamp("\nSkipped (with reasons):")
+        skipped_items = [x for x in all_training_logs if x["status"] == "SKIPPED"]
+        for item in skipped_items:
+            print_timestamp(f"  {item['annotation']} / {item['tissue']}: {item['reason']}")
+
+    print_timestamp("\n=== All done ===")
 
 
 if __name__ == "__main__":
