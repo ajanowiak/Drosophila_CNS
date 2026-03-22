@@ -253,9 +253,9 @@ def train_tissue(
             "std_auc": None,
             "mean_acc": None,
             "std_acc": None,
-            "n_loops_06-08": n_loops_dict["06-08"][annotation] if 'n_loops_dict' in locals() else 0,
-            "n_loops_10-12": n_loops_dict["10-12"][annotation] if 'n_loops_dict' in locals() else 0,
-            "n_loops_14-16": n_loops_dict["14-16"][annotation] if 'n_loops_dict' in locals() else 0,
+            "n_loops_06-08": n_loops_dict["06-08"].get(annotation, 0) if 'n_loops_dict' in locals() else 0,
+            "n_loops_10-12": n_loops_dict["10-12"].get(annotation, 0) if 'n_loops_dict' in locals() else 0,
+            "n_loops_14-16": n_loops_dict["14-16"].get(annotation, 0) if 'n_loops_dict' in locals() else 0,
             "n_available_windows": 0,
         }
 
@@ -320,9 +320,9 @@ def train_tissue(
         "std_auc": std_auc,
         "mean_acc": mean_acc,
         "std_acc": std_acc,
-        "n_loops_06-08": n_loops_dict["06-08"][annotation],
-        "n_loops_10-12": n_loops_dict["10-12"][annotation],
-        "n_loops_14-16": n_loops_dict["14-16"][annotation],
+        "n_loops_06-08": n_loops_dict["06-08"].get(annotation, 0),
+        "n_loops_10-12": n_loops_dict["10-12"].get(annotation, 0),
+        "n_loops_14-16": n_loops_dict["14-16"].get(annotation, 0),
         "n_available_windows": n_available_windows,
     }
 
