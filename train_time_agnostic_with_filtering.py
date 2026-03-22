@@ -412,7 +412,9 @@ def main():
 
         if rows:  # Only save if there are trained results
             summary_df = pd.DataFrame(rows)
-            summary_df = summary_df.sort_index(key=lambda x: x.str.extract(r'(\d+)').astype(int)[0])
+            summary_df = summary_df.sort_index(
+                key=lambda x: x.astype(str).str.extract(r'(\d+)').astype(int)[0]
+            )
             
             summary_dir = f"results/time_agnostic_with_filtering/refined_annotations"
             os.makedirs(summary_dir, exist_ok=True)
