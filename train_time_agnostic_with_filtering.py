@@ -15,6 +15,8 @@
 # Usage:
 #   python3 train_time_agnostic_with_filtering.py --cells_threshold 1000
 
+# Sprawdzić wyniki dla threshold 0
+
 import os
 import argparse
 import pickle
@@ -40,25 +42,29 @@ RF_PARAMS = dict(n_estimators=500, random_state=0, n_jobs=-1)
 # ---------------------------------------------------------------------------
 
 
-def get_annotations_from_directory(label_tag: str = "refined_annotations") -> list[str]:
+def get_annotations_from_directory(label_tag: str = "refined_annotations", winodows: list[str] = WINDOWS) -> list[str]:
     """
     Scan the results directory to get list of annotations.
     Looks for {annotation}_motif_enrichment_hrs{w}.csv files.
     Returns list of annotation names.
     """
-    sample_dir = f"results/training_data/{label_tag}/hrs06-08"
     
-    if not os.path.exists(sample_dir):
-        return []
-    
-    annotations = []
-    for fname in os.listdir(sample_dir):
-        if "_motif_enrichment_hrs" in fname and fname.endswith(".csv"):
-            # Extract annotation name from {annotation}_motif_enrichment_hrs{w}.csv
-            annotation = fname.replace("_motif_enrichment_hrs06-08.csv", "")
-            if annotation and annotation not in annotations:
-                annotations.append(annotation)
-    return sorted(annotations)
+    annotations = set()
+    for w in winodows:
+        sample_dir = f"results/training_data/{label_tag}/hrs{w}"
+
+        if not os.path.exists(sample_dir):
+            continue
+
+        for fname in os.listdir(sample_dir):
+            if "_motif_enrichment_hrs" in fname and fname.endswith(".csv"):
+
+                # Extract annotation name from {annotation}_motif_enrichment_hrs{w}.csv
+                annotation = fname.replace(f"_motif_enrichment_hrs{w}.csv", "")
+                if annotation and annotation not in annotations:
+                    annotations.add(annotation)
+
+    return sorted(list(annotations))
 
 
 def filter_loops_by_threshold(
@@ -324,7 +330,7 @@ def main():
     parser.add_argument(
         "--cells_threshold",
         type=int,
-        default=1000,
+        default=100,
         help="Minimal number of 1-1 cells that a loop should have in order to be included in training",
     )
     args = parser.parse_args()
@@ -406,6 +412,8 @@ def main():
 
         if rows:  # Only save if there are trained results
             summary_df = pd.DataFrame(rows)
+            summary_df = summary_df.sort_index(key=lambda x: x.str.extract(r'(\d+)').astype(int)[0])
+            
             summary_dir = f"results/time_agnostic_with_filtering/refined_annotations"
             os.makedirs(summary_dir, exist_ok=True)
             summary_path = os.path.join(
