@@ -66,12 +66,25 @@ def get_annotations_from_directory(label_tag: str = "refined_annotations", winod
 
     return sorted(list(annotations))
 
+def count_remaining_loops(
+        count_df: pd.DataFrame,
+        threshold: int,
+    ) -> pd.Series:
+    """
+        Returns pd.Series
+        
+        n_remaining["Brain"]: 399
+    """
+    mask = count_df >= threshold
+    n_remaining =  mask.sum(axis=0)
+    return n_remaining
 
 def filter_loops_by_threshold(
     enrichment_df: pd.DataFrame,
-    count_df: pd.DataFrame,
+    count_df: pd.DataFrame, # to jest tylko do alignmentu indeksów, ew. można wywalić
+    annotation: str,
     threshold: int
-) -> tuple[pd.DataFrame, pd.Series]:
+        ) -> pd.DataFrame:
     """
     Filter out loops with less than threshold "1-1" cells.
     
@@ -83,14 +96,6 @@ def filter_loops_by_threshold(
     Returns:
         filtered enrichment DataFrame and count of remaining loops in each tissue (Series)
     """
-    # If count_df is 2D (multiple tissues), take max across tissues
-    # if len(count_df.shape) > 1:
-    #     counts = count_df.max(axis=1)
-    # else:
-    #     counts = count_df
-    
-    mask = count_df >= threshold
-    n_remaining = mask.sum(axis=0)
     
     # Align indices
     shared_loops = enrichment_df.index.intersection(count_df.index)
@@ -98,14 +103,12 @@ def filter_loops_by_threshold(
     count_df = count_df.loc[shared_loops]
     
     # Filter by threshold
-    # mask = counts >= threshold
-    # enrichment_filtered = enrichment_df[mask]
 
     mask = count_df >= threshold
-    n_remaining = mask.sum(axis=0)
+    mask = mask[annotation]
     enrichment_filtered = enrichment_df[mask]
     
-    return enrichment_filtered, n_remaining
+    return enrichment_filtered
 
 
 def compose_windows_enrichment(
@@ -171,14 +174,8 @@ def compose_windows_enrichment(
         y_w = y_w.loc[shared_loops]
 
         # Filter by cell count threshold
-        X_w_filt, n_passing = filter_loops_by_threshold(X_w, count_w, cells_threshold)
-        n_loops_dict[w] = n_passing
-
-        # if n_passing == 0:
-        #     print_timestamp(
-        #         f"    hrs{w}: no loops passed threshold (n_loops=0), skipping window"
-        #     )
-        #     continue
+        X_w_filt = filter_loops_by_threshold(X_w, count_w, annotation, cells_threshold)
+        # n_loops_dict[w] = n_passing
 
         # Align label with filtered loops
         y_w = y_w.loc[X_w_filt.index]
@@ -214,7 +211,7 @@ def compose_windows_enrichment(
     composite = pd.Categorical(list(zip(X["_window"], y))).codes
     X = X.drop(columns=["_window"])
 
-    return X, y, composite, n_loops_dict
+    return X, y, composite
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +222,7 @@ def train_tissue(
     tissue: str,
     annotation: str,
     cells_threshold: int,
+    n_loops_dict: dict[str: pd.Series],
     label_tag: str = "refined_annotations",
     n_splits: int = N_SPLITS,
     params: dict = RF_PARAMS,
@@ -239,7 +237,7 @@ def train_tissue(
     print_timestamp(f"  [{annotation}] [{tissue}] Checking available windows...")
 
     try:
-        X, y, composite, n_loops_dict = compose_windows_enrichment(
+        X, y, composite = compose_windows_enrichment(
             tissue, annotation, cells_threshold, label_tag
         )
     except ValueError as e:
@@ -261,10 +259,10 @@ def train_tissue(
             "n_available_windows": 0,
         }
 
-    n_available_windows = sum(1 for n in n_loops_dict.values() if n.sum() > 0)
+    n_available_windows = sum(1 for series in n_loops_dict.values() if series.sum() > 0)
     
     print_timestamp(
-        f"  [{annotation}] [{tissue}] Data shape after threshold+NaN drop: {X.shape}, "
+        f"  [{annotation}] [{tissue}] Data shape after threshold + NaN drop: {X.shape}, "
         f"positives: {y.sum()}, available windows: {n_available_windows}/3"
     )
 
@@ -340,8 +338,19 @@ def main():
         help="Minimal number of 1-1 cells that a loop should have in order to be included in training",
     )
     args = parser.parse_args()
-
+    
+    ###
     label_tag = "refined_annotations"
+    ###
+
+    # CONSTRUCT REMAINING LOOP COUNTER FOR REPORTING
+    n_loops_dict = {}
+    for w in WINDOWS:
+        feature_dir = f"results/training_data/{label_tag}/hrs{w}" 
+        count_path = os.path.join(feature_dir, f"count11_all_tissues_hrs{w}.csv")
+        count_df = pd.read_csv(count_path, index_col=0)
+
+        n_loops_dict[w] = count_remaining_loops(count_df, threshold=args.cells_threshold)
 
     print_timestamp(f"=== Training time-agnostic RF | cells_threshold={args.cells_threshold} ===")
     
@@ -366,7 +375,7 @@ def main():
         with ProcessPoolExecutor(max_workers=len(TISSUES)) as executor:
             futures = {
                 executor.submit(
-                    train_tissue, t, annotation, args.cells_threshold, label_tag, N_SPLITS
+                    train_tissue, t, annotation, args.cells_threshold, n_loops_dict, label_tag, N_SPLITS
                 ): t
                 for t in TISSUES
             }
