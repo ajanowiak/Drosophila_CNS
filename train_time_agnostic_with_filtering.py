@@ -253,17 +253,16 @@ def train_tissue(
             "std_auc": None,
             "mean_acc": None,
             "std_acc": None,
-            "n_loops_06-08": n_loops_dict["06-08"].get(annotation, 0) if 'n_loops_dict' in locals() else 0,
-            "n_loops_10-12": n_loops_dict["10-12"].get(annotation, 0) if 'n_loops_dict' in locals() else 0,
-            "n_loops_14-16": n_loops_dict["14-16"].get(annotation, 0) if 'n_loops_dict' in locals() else 0,
-            "n_available_windows": 0,
+            "n_loops_06-08": n_loops_dict["06-08"].get(annotation, np.nan) if 'n_loops_dict' in locals() else 0,
+            "n_loops_10-12": n_loops_dict["10-12"].get(annotation, np.nan) if 'n_loops_dict' in locals() else 0,
+            "n_loops_14-16": n_loops_dict["14-16"].get(annotation, np.nan) if 'n_loops_dict' in locals() else 0,
         }
 
-    n_available_windows = sum(1 for series in n_loops_dict.values() if series.sum() > 0)
+    # n_available_windows = sum(1 for series in n_loops_dict.values() if series.sum() > 0)
     
     print_timestamp(
         f"  [{annotation}] [{tissue}] Data shape after threshold + NaN drop: {X.shape}, "
-        f"positives: {y.sum()}, available windows: {n_available_windows}/3"
+        f"positives: {y.sum()}, "#available windows: {n_available_windows}/3"
     )
 
     classifier = RandomForestClassifier(**params)
@@ -307,7 +306,7 @@ def train_tissue(
     pickle.dump(all_clf, open(all_path, "wb"))
 
     print_timestamp(
-        f"  [{annotation}] [{tissue}] Done (windows {n_available_windows}/3) - "
+        f"  [{annotation}] [{tissue}] Done (windows - "
         f"AUC={mean_auc:.4f} ± {std_auc:.4f}, Acc={mean_acc:.4f} ± {std_acc:.4f}"
     )
 
@@ -320,10 +319,10 @@ def train_tissue(
         "std_auc": std_auc,
         "mean_acc": mean_acc,
         "std_acc": std_acc,
-        "n_loops_06-08": n_loops_dict["06-08"].get(annotation, 0),
-        "n_loops_10-12": n_loops_dict["10-12"].get(annotation, 0),
-        "n_loops_14-16": n_loops_dict["14-16"].get(annotation, 0),
-        "n_available_windows": n_available_windows,
+        "n_loops_06-08": n_loops_dict["06-08"].get(annotation, np.nan),
+        "n_loops_10-12": n_loops_dict["10-12"].get(annotation, np.nan),
+        "n_loops_14-16": n_loops_dict["14-16"].get(annotation, np.nan),
+        # "n_available_windows": n_available_windows,
     }
 
 
@@ -400,7 +399,7 @@ def main():
                         "n_loops_06-08": 0,
                         "n_loops_10-12": 0,
                         "n_loops_14-16": 0,
-                        "n_available_windows": 0,
+                        # "n_available_windows": 0,
                     })
                     raise
 
@@ -422,7 +421,7 @@ def main():
                     "n_loops_06-08": r["n_loops_06-08"],
                     "n_loops_10-12": r["n_loops_10-12"],
                     "n_loops_14-16": r["n_loops_14-16"],
-                    "n_available_windows": r["n_available_windows"],
+                    # "n_available_windows": r["n_available_windows"],
                 })
 
         if rows:  # Only save if there are trained results
