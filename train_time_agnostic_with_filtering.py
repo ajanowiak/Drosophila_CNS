@@ -71,33 +71,39 @@ def filter_loops_by_threshold(
     enrichment_df: pd.DataFrame,
     count_df: pd.DataFrame,
     threshold: int
-) -> tuple[pd.DataFrame, int]:
+) -> tuple[pd.DataFrame, pd.Series]:
     """
     Filter out loops with less than threshold "1-1" cells.
     
     Args:
         enrichment_df: enrichment matrix (n_loops, n_motifs)
-        count_df: count matrix or series (n_loops,) or (n_loops, n_tissues)
+        count_df: count matrix (n_loops, n_tissues)
         threshold: minimum count threshold
     
     Returns:
-        filtered enrichment DataFrame and count of remaining loops
+        filtered enrichment DataFrame and count of remaining loops in each tissue (Series)
     """
     # If count_df is 2D (multiple tissues), take max across tissues
-    if len(count_df.shape) > 1:
-        counts = count_df.max(axis=1)
-    else:
-        counts = count_df
+    # if len(count_df.shape) > 1:
+    #     counts = count_df.max(axis=1)
+    # else:
+    #     counts = count_df
+    
+    mask = count_df >= threshold
+    n_remaining = mask.sum(axis=0)
     
     # Align indices
-    shared_loops = enrichment_df.index.intersection(counts.index)
+    shared_loops = enrichment_df.index.intersection(count_df.index)
     enrichment_df = enrichment_df.loc[shared_loops]
-    counts = counts.loc[shared_loops]
+    count_df = count_df.loc[shared_loops]
     
     # Filter by threshold
-    mask = counts >= threshold
+    # mask = counts >= threshold
+    # enrichment_filtered = enrichment_df[mask]
+
+    mask = count_df >= threshold
+    n_remaining = mask.sum(axis=0)
     enrichment_filtered = enrichment_df[mask]
-    n_remaining = len(enrichment_filtered)
     
     return enrichment_filtered, n_remaining
 
@@ -159,20 +165,20 @@ def compose_windows_enrichment(
         y_w = pd.read_csv(y_path, index_col=0).iloc[:, 0]
 
         # Align on shared loops
-        shared = X_w.index.intersection(y_w.index)
-        X_w = X_w.loc[shared]
-        count_w = count_w.loc[shared]
-        y_w = y_w.loc[shared]
+        shared_loops = X_w.index.intersection(y_w.index)
+        X_w = X_w.loc[shared_loops]
+        count_w = count_w.loc[shared_loops]
+        y_w = y_w.loc[shared_loops]
 
         # Filter by cell count threshold
         X_w_filt, n_passing = filter_loops_by_threshold(X_w, count_w, cells_threshold)
         n_loops_dict[w] = n_passing
 
-        if n_passing == 0:
-            print_timestamp(
-                f"    hrs{w}: no loops passed threshold (n_loops=0), skipping window"
-            )
-            continue
+        # if n_passing == 0:
+        #     print_timestamp(
+        #         f"    hrs{w}: no loops passed threshold (n_loops=0), skipping window"
+        #     )
+        #     continue
 
         # Align label with filtered loops
         y_w = y_w.loc[X_w_filt.index]
@@ -249,13 +255,13 @@ def train_tissue(
             "std_auc": None,
             "mean_acc": None,
             "std_acc": None,
-            "n_loops_06-08": n_loops_dict.get("06-08", 0) if 'n_loops_dict' in locals() else 0,
-            "n_loops_10-12": n_loops_dict.get("10-12", 0) if 'n_loops_dict' in locals() else 0,
-            "n_loops_14-16": n_loops_dict.get("14-16", 0) if 'n_loops_dict' in locals() else 0,
+            "n_loops_06-08": n_loops_dict["06-08"][annotation] if 'n_loops_dict' in locals() else 0,
+            "n_loops_10-12": n_loops_dict["10-12"][annotation] if 'n_loops_dict' in locals() else 0,
+            "n_loops_14-16": n_loops_dict["14-16"][annotation] if 'n_loops_dict' in locals() else 0,
             "n_available_windows": 0,
         }
 
-    n_available_windows = sum(1 for n in n_loops_dict.values() if n > 0)
+    n_available_windows = sum(1 for n in n_loops_dict.values() if n.sum() > 0)
     
     print_timestamp(
         f"  [{annotation}] [{tissue}] Data shape after threshold+NaN drop: {X.shape}, "
@@ -316,9 +322,9 @@ def train_tissue(
         "std_auc": std_auc,
         "mean_acc": mean_acc,
         "std_acc": std_acc,
-        "n_loops_06-08": n_loops_dict["06-08"],
-        "n_loops_10-12": n_loops_dict["10-12"],
-        "n_loops_14-16": n_loops_dict["14-16"],
+        "n_loops_06-08": n_loops_dict["06-08"][annotation],
+        "n_loops_10-12": n_loops_dict["10-12"][annotation],
+        "n_loops_14-16": n_loops_dict["14-16"][annotation],
         "n_available_windows": n_available_windows,
     }
 
