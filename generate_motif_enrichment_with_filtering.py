@@ -191,6 +191,12 @@ def compute_enrichment_for_window(window: str, anot_df: pd.DataFrame, filter_neu
 
         # --- Save enrichment matrix ---
         enrichment_df = pd.DataFrame(enrichment_matrix, index=loop_ids, columns=motif_ids)
+        
+        # sort index by loop number
+        enrichment_df = enrichment_df.sort_index(
+            key=lambda x: x.astype(str).str.extract(r'(\d+)').astype(int)[0]
+        )
+
         enrichment_path = os.path.join(output_dir, f"{label}_motif_enrichment_hrs{window}.csv")
         enrichment_df.to_csv(enrichment_path)
 
@@ -203,7 +209,7 @@ def compute_enrichment_for_window(window: str, anot_df: pd.DataFrame, filter_neu
         print_timestamp(f"Window {window}: saved tissue '{label}' outputs")
 
     # --- Save global counts table (loops x tissues) ---
-    global_count_path = os.path.join(output_dir, f"count11_all_tissues_hrs{window}.csv")
+    global_count_path = f"results/training_data/refined_annotations/1-1_cell_counts/count11_all_tissues_hrs{window}.csv"
     global_count_11.to_csv(global_count_path)
 
     print_timestamp(f"Window {window}: saved global count table to {global_count_path}")

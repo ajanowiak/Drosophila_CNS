@@ -140,7 +140,8 @@ def compose_windows_enrichment(
     for idx, w in enumerate(WINDOWS):
         feature_dir = f"results/training_data/{label_tag}/hrs{w}"
         enrich_path = os.path.join(feature_dir, f"{annotation}_motif_enrichment_hrs{w}.csv")
-        count_path = os.path.join(feature_dir, f"count11_all_tissues_hrs{w}.csv")
+        
+        count_path = f"results/training_data/refined_annotations/1-1_cell_counts/count11_all_tissues_hrs{w}.csv"
         y_path = os.path.join(feature_dir, f"y_{tissue}.csv")
 
         # Check if all required files exist for this window
@@ -346,7 +347,8 @@ def main():
     n_loops_dict = {}
     for w in WINDOWS:
         feature_dir = f"results/training_data/{label_tag}/hrs{w}" 
-        count_path = os.path.join(feature_dir, f"count11_all_tissues_hrs{w}.csv")
+        
+        count_path = f"results/training_data/refined_annotations/1-1_cell_counts/count11_all_tissues_hrs{w}.csv"
         count_df = pd.read_csv(count_path, index_col=0)
 
         n_loops_dict[w] = count_remaining_loops(count_df, threshold=args.cells_threshold)
