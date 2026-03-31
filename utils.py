@@ -20,9 +20,14 @@ def compose_windows(tissue, windows=["06-08", "10-12", "14-16"]):
     concatenate window-specific DataFrames and generate a `composite` vector for stratification
     """
     Xs, ys = [], []
+    training_dir = "results/training_data/unfiltered"
+    
     for idx, w in enumerate(windows):
-        curr_X = pd.read_csv(f"data/training/hrs{w}/data_diff_hrs{w}.csv", index_col=0)
-        curr_y = pd.read_csv(f"data/training/hrs{w}/y_{tissue}.csv", index_col=0).iloc[:, 0]
+    
+        curr_X = pd.read_csv(os.path.join(training_dir, f"hrs{w}/motif_enrichment_hrs{w}.csv"), index_col=0)
+        curr_y = pd.read_csv(os.path.join(training_dir, f"hrs{w}/y_{tissue}.csv"), index_col=0).iloc[:, 0]
+        
+        curr_X = curr_X.dropna(axis=0)
         curr_X['window'] = idx
 
         Xs.append(curr_X)
