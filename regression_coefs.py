@@ -1,3 +1,4 @@
+import argparse
 import os
 import pickle
 import numpy as np
@@ -35,7 +36,7 @@ def num_features_from_epv(tissue: str, epv: int = 10) -> int:
 
     return int(np.ceil(num_events / epv))
 
-def downsample_features(tissue: str, num_features = None) -> pd.Series:
+def downsample_features_shap(tissue: str, num_features = None) -> pd.Series:
     shap_importance = pd.read_csv(f"results/shap/XGB/{tissue}_shap_table_XGB.csv")
 
     # Sortuję po abs_mean_importance
@@ -43,6 +44,19 @@ def downsample_features(tissue: str, num_features = None) -> pd.Series:
     # do takich jakbyśmy dostali biorąc motywy o największym odchyleniu standardowym importance
     
     sorted_features = shap_importance.sort_values('abs_mean_importance', ascending=False)["motif_id"]
+    
+    if num_features:
+        return sorted_features[:num_features]
+    else:
+        return sorted_features
+
+def downsample_features(tissue: str, num_features = None) -> pd.Series:
+    # Simpler version (relative to XGBoost and SHAP): features are downsampled based on Mean Decrease in Impurity in time-agnostic Random Forest model.
+
+    data_path = f"results/RF_MDI_importance"
+
+    shap_importance = pd.read_csv(f"results/RF_MDI_importance/{tissue}_importance_table.csv")
+    sorted_features = shap_importance.sort_values('mean_importance', ascending=False)["motif_id"]
     
     if num_features:
         return sorted_features[:num_features]
@@ -122,43 +136,6 @@ def plot_coeffs(summary_df, tissue, num_features, output_path=None, top_n=20):
     else:
         plt.show()
 
-def plot_odds_ratio(summary_df, tissue, num_features, output_path=None, top_n=20):
-    """
-    Plot odds ratios with 95% confidence intervals.
-    
-    Args:
-        summary_df: DataFrame with regression results
-        tissue: Tissue name for title
-        num_features: Number of features used
-        output_path: If provided, save plot to this path
-        top_n: Number of top features to display
-    """
-    df_plot = summary_df.head(top_n).iloc[::-1]
-
-    plt.figure(figsize=(8, 6))
-
-    plt.errorbar(
-        df_plot["odds_ratio"],
-        df_plot.index,
-        xerr=[
-            df_plot["odds_ratio"] - df_plot["or_lower"],
-            df_plot["or_upper"] - df_plot["odds_ratio"]
-        ],
-        fmt='o'
-    )
-
-    plt.axvline(1, linestyle="--", color='r')  # neutral effect
-    plt.xlabel("Odds Ratio")
-    plt.title(f"Top {top_n} Odds Ratios with 95% CI - {tissue}")
-    plt.xscale("log")
-    plt.tight_layout()
-    
-    if output_path:
-        plt.savefig(output_path, dpi=300, format="pdf")
-        plt.close()
-    else:
-        plt.show()
-
 def plot_volcano(summary_df, tissue, num_features, output_path=None, p_thresh=0.05, effect_thresh=0.5):
     """
     Create volcano plot of logistic regression coefficients.
@@ -221,12 +198,16 @@ def plot_volcano(summary_df, tissue, num_features, output_path=None, p_thresh=0.
         plt.show()
 
 def main():
+    parser = argparse.ArgumentParser(description="Perform logistic regression analysis on motif enrichment data")
+    parser.add_argument("--epv", type=int, default=10, help="Events per variable for feature selection (default: 10)")
+    args = parser.parse_args()
+    
     windows = ["06-08", "10-12", "14-16"]
     tissues = ["Neuroblasts", "Neurons", "Glia"]
     model_name = "Logistic Regression"
     model_short = "LR"
 
-    epv = 10
+    epv = args.epv
     motif_annotations_path = "data/motif_names.tsv"
     top_n = 20
 
@@ -283,11 +264,6 @@ def main():
 
         summary_df = pd.concat([summary_df, ci], axis=1)
 
-        # Odds ratios
-        summary_df["odds_ratio"] = np.exp(summary_df["coef"])
-        summary_df["or_lower"] = np.exp(summary_df["ci_lower"])
-        summary_df["or_upper"] = np.exp(summary_df["ci_upper"])
-
         # Sort by importance
         summary_df = summary_df.sort_values("coef", key=abs, ascending=False)
 
@@ -303,9 +279,6 @@ def main():
         coef_plot_path = os.path.join(figures_path, f"{tissue}_coefficients.pdf")
         plot_coeffs(summary_df, tissue, num_features, output_path=coef_plot_path, top_n=top_n)
 
-        or_plot_path = os.path.join(figures_path, f"{tissue}_odds_ratio.pdf")
-        plot_odds_ratio(summary_df, tissue, num_features, output_path=or_plot_path, top_n=top_n)
-
         volcano_plot_path = os.path.join(figures_path, f"{tissue}_volcano.pdf")
         plot_volcano(summary_df, tissue, num_features, output_path=volcano_plot_path)
 
@@ -320,4 +293,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
