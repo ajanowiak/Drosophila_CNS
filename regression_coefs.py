@@ -8,7 +8,7 @@ import subprocess
 
 from utils import print_timestamp
 import statsmodels.api as sm
-
+from statsmodels.stats.multitest import multipletests
 
 def num_features_from_epv(tissue: str, epv: int = 10) -> int:
     """
@@ -53,10 +53,8 @@ def downsample_features_shap(tissue: str, num_features = None) -> pd.Series:
 def downsample_features(tissue: str, num_features = None) -> pd.Series:
     # Simpler version (relative to XGBoost and SHAP): features are downsampled based on Mean Decrease in Impurity in time-agnostic Random Forest model.
 
-    data_path = f"results/RF_MDI_importance"
-
-    shap_importance = pd.read_csv(f"results/RF_MDI_importance/{tissue}_importance_table.csv")
-    sorted_features = shap_importance.sort_values('mean_importance', ascending=False)["motif_id"]
+    mdi_importance = pd.read_csv(f"results/RF_MDI_importance/{tissue}_importance_table.csv")
+    sorted_features = mdi_importance.sort_values('mean_importance', ascending=False)["motif_id"]
     
     if num_features:
         return sorted_features[:num_features]
@@ -149,12 +147,17 @@ def plot_volcano(summary_df, tissue, num_features, output_path=None, p_thresh=0.
         effect_thresh: Effect size threshold
     """
     df = summary_df.copy()
+    p_column_name = "p_adjusted_bh" 
+
+    print(df[p_column_name].describe())
+    print((df[p_column_name] == 0).sum())
+    print(df[p_column_name].isna().sum())
 
     # Categories
     conditions = [
-        (df["p"] < p_thresh) & (df["coef"] > effect_thresh),
-        (df["p"] < p_thresh) & (df["coef"] < -effect_thresh),
-        (df["p"] < p_thresh)
+        (df[p_column_name] < p_thresh) & (df["coef"] > effect_thresh),
+        (df[p_column_name] < p_thresh) & (df["coef"] < -effect_thresh),
+        (df[p_column_name] < p_thresh)
     ]
 
     choices = [
@@ -171,13 +174,13 @@ def plot_volcano(summary_df, tissue, num_features, output_path=None, p_thresh=0.
     # Plot all points
     for cat, group in df.groupby("category"):
         if cat == "positive_strong":
-            plt.scatter(group["coef"], -np.log10(group["p"]), label="Strong positive", c='firebrick')
+            plt.scatter(group["coef"], -np.log10(group[p_column_name]), label="Strong positive", c='firebrick')
         elif cat == "negative_strong":
-            plt.scatter(group["coef"], -np.log10(group["p"]), label="Strong negative", c='navy')
+            plt.scatter(group["coef"], -np.log10(group[p_column_name]), label="Strong negative", c='navy')
         elif cat == "significant_only":
-            plt.scatter(group["coef"], -np.log10(group["p"]), label="Significant small effect")
+            plt.scatter(group["coef"], -np.log10(group[p_column_name]), label="Significant small effect")
         else:
-            plt.scatter(group["coef"], -np.log10(group["p"]), alpha=0.3, c='grey')
+            plt.scatter(group["coef"], -np.log10(group[p_column_name]), alpha=0.3, c='grey')
 
     # Threshold lines
     plt.axhline(-np.log10(p_thresh), c='black', linestyle='dotted')
@@ -185,8 +188,8 @@ def plot_volcano(summary_df, tissue, num_features, output_path=None, p_thresh=0.
     plt.axvline(-effect_thresh, c='black', linestyle='dotted')
 
     plt.xlabel("Effect size (coef)")
-    plt.ylabel("-log10(p-value)")
-    plt.title(f"Volcano Plot - {tissue} ({num_features} features)\nP-value threshold (unadjusted): {p_thresh}")
+    plt.ylabel("-log10(adjusted p-value (Benjamini-Hochberg))")
+    plt.title(f"Volcano Plot - {tissue} ({num_features} features)\nP-value threshold: {p_thresh}")
 
     plt.legend()
     plt.tight_layout()
@@ -217,7 +220,8 @@ def main():
         num_features = num_features_from_epv(tissue, epv)
         print_timestamp(f"Selected {num_features} features for tissue {tissue} and EPV = {epv}")
 
-        downsampled_features = downsample_features(tissue, num_features)
+        # one of two functions here: downsample_features() or downsample_features_shap()
+        downsampled_features = downsample_features_shap(tissue, num_features)
 
         X, y, composite = compose_downsampled_windows(tissue, downsampled_features)
 
@@ -249,17 +253,23 @@ def main():
         X_full_sm = sm.add_constant(X_named)
         model_full = sm.Logit(y, X_full_sm)
 
-        res_reg = model_full.fit(disp=False)
+        res_full = model_full.fit(disp=False)
+
+        p_vals_unadjusted = res_full.pvalues
+        _, p_vals_bh, _, _ = multipletests(p_vals_unadjusted, method="fdr_bh")  # Benjamini-Hochberg
+        _, p_vals_tsbh, _, _ = multipletests(p_vals_unadjusted, method="fdr_tsbh") # two stage Benjamini-Hochberg (less conservative (?))
 
         summary_df = pd.DataFrame({
-            "coef": res_reg.params,
-            "std_err": res_reg.bse,
-            "z": res_reg.tvalues,
-            "p": res_reg.pvalues
+            "coef": res_full.params,
+            "std_err": res_full.bse,
+            "z": res_full.tvalues,
+            "p_unadjusted": p_vals_unadjusted,
+            "p_adjusted_bh": p_vals_bh,
+            "p_adjusted_tsbh": p_vals_tsbh,
         })
 
         # Confidence intervals
-        ci = res_reg.conf_int()
+        ci = res_full.conf_int()
         ci.columns = ["ci_lower", "ci_upper"]
 
         summary_df = pd.concat([summary_df, ci], axis=1)
@@ -268,8 +278,8 @@ def main():
         summary_df = summary_df.sort_values("coef", key=abs, ascending=False)
 
         # Create output directories
-        figures_path = f"results/figures/regression_coefs"
-        data_path = f"results/regression_coefs"
+        figures_path = f"results/figures/regression_coefs/epv_{epv}"
+        data_path = f"results/regression_coefs/epv_{epv}"
         os.makedirs(figures_path, exist_ok=True)
         os.makedirs(data_path, exist_ok=True)
 

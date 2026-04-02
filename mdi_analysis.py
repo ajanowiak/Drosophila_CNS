@@ -7,6 +7,7 @@
 
 import os
 import pickle
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -64,14 +65,19 @@ def rf_importance_analysis(
         motif_ids = annot["id"]
         motif_names = annot["name"]
 
-    # Extract RF importance scores
-    importance_scores = model.feature_importances_
+    # Extract RF importance scores from each tree
+    tree_importances = [tree.feature_importances_ for tree in model.estimators_]
+    
+    # Compute mean and std across trees
+    mean_importance = np.mean(tree_importances, axis=0)
+    std_importance = np.std(tree_importances, axis=0)
 
     # Create results dataframe
     importance_df = pd.DataFrame({
         "motif_id": motif_ids,
         "motif_name": motif_names,
-        "mean_importance": importance_scores
+        "mean_importance": mean_importance,
+        "std_importance": std_importance
     }).sort_values("mean_importance", ascending=False)
 
     # Plot top motifs
@@ -83,16 +89,19 @@ def rf_importance_analysis(
     ax.barh(
         top_df["motif_name"],
         top_df["mean_importance"],
+        xerr=top_df["std_importance"],
         color = "mediumseagreen",
         alpha = 0.8,
         edgecolor="black",
-        linewidth=0.6
+        linewidth=0.6,
+        capsize=4,
+        error_kw={"elinewidth": 1, "alpha": 0.7}
     )
 
     ax.set_xlabel("Mean feature importance across trees", fontsize=11)
     ax.set_ylabel("")
     ax.set_title(
-        f"{model_name} mean feature importance across trees\n{tissue}",
+        f"Mean feature importance across trees in the Random Forest model\nTissue: {tissue}. Top {top_n_motifs} features",
         fontsize=13,
         pad=12
     )
