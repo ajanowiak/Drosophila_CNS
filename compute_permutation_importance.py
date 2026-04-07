@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from utils import compose_windows
+from utils import compose_windows, print_timestamp
 from sklearn.inspection import permutation_importance
 
 
@@ -148,7 +148,7 @@ def main():
     annot_path = "data/motif_names.tsv"
 
     for tissue in tissues:
-        print(f"RF permutation importance analysis for tissue {tissue}...")
+        print_timestamp(f"RF permutation importance analysis for tissue {tissue}...")
 
         _ = pemutation_analysis(
             classifier_path=f"results/models/time_agnostic/all_data/RF_{tissue}.pkl",
@@ -157,6 +157,7 @@ def main():
             motif_annotations_path=annot_path,
             motif_annotations_sep="\t"
         )
+    print_timestamp("... done!")
 
 
 if __name__ == "__main__":
