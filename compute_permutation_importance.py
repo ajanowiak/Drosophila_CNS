@@ -1,9 +1,8 @@
-# mdi_analysis.py
-# MDI = Mean Decrease in Impurity
+# compute_permutation_importance.py
+# alternative for mdi_analysis.py
 
-# Feature importance analysis of time-agnostic Random Forest
-# EPV-based feature selection in regression_coefs.py will be based on MDI
-# można jeszcze jakieś permutation importance zrobić
+# Tutaj importance to score(baseline) - score(permuted)
+# default scorer for RandomForestClassifier is accuracy
 
 import os
 import pickle
@@ -12,18 +11,21 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from utils import compose_windows
+from sklearn.inspection import permutation_importance
 
 
-def rf_importance_analysis(
+
+def pemutation_analysis(
     classifier_path: str,
     tissue: str,
+    n_repeats: int = 20,
     motif_annotations_path: str = None,
     motif_annotations_sep: str = None,
     windows: list[str] = ["06-08", "10-12", "14-16"],
     top_n_motifs: int = 20
 ):
     """
-    Analyse feature importance scores for a pretrained
+    Analyse permutation feature importance scores for a pretrained
     time-agnostic Random Forest classifier.
 
     This function:
@@ -66,11 +68,13 @@ def rf_importance_analysis(
         motif_names = annot["name"]
 
     # Extract RF importance scores from each tree
-    tree_importances = [tree.feature_importances_ for tree in model.estimators_]
+    # TU ZMIENIĆ
+    r = permutation_importance(model, X, y)
+    # tree_importances = [tree.feature_importances_ for tree in model.estimators_]
     
     # Compute mean and std across trees
-    mean_importance = np.mean(tree_importances, axis=0)
-    std_importance = np.std(tree_importances, axis=0)
+    mean_importance = r['importances_mean']
+    std_importance = r['importances_std']
 
     # Create results dataframe
     importance_df = pd.DataFrame({
@@ -135,7 +139,7 @@ def rf_importance_analysis(
 
     df_path = os.path.join(
         data_path,
-        f"{tissue}_mdi_importance_table.csv"
+        f"{tissue}_importance_table.csv"
     )
     importance_df.to_csv(df_path, index=False)
 
@@ -147,9 +151,9 @@ def main():
     annot_path = "data/motif_names.tsv"
 
     for tissue in tissues:
-        print(f"RF importance analysis for tissue {tissue}...")
+        print(f"RF permutation importance analysis for tissue {tissue}...")
 
-        _ = rf_importance_analysis(
+        _ = pemutation_analysis(
             classifier_path=f"results/models/time_agnostic/all_data/RF_{tissue}.pkl",
             tissue=tissue,
             top_n_motifs=35,
