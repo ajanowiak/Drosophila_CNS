@@ -28,6 +28,13 @@ def compose_windows(tissue, windows=["06-08", "10-12", "14-16"]):
         curr_y = pd.read_csv(os.path.join(training_dir, f"hrs{w}/y_{tissue}.csv"), index_col=0).iloc[:, 0]
         
         curr_X = curr_X.dropna(axis=0)
+        
+        # keep only loops present in both X and y
+        common_idx = curr_X.index.intersection(curr_y.index)
+
+        curr_X = curr_X.loc[common_idx].copy()
+        curr_y = curr_y.loc[common_idx].copy()
+
         curr_X['window'] = idx
 
         Xs.append(curr_X)

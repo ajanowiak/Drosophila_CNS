@@ -18,7 +18,7 @@ from sklearn.inspection import permutation_importance
 def pemutation_analysis(
     classifier_path: str,
     tissue: str,
-    n_repeats: int = 20,
+    n_repeats: int = 5,
     motif_annotations_path: str = None,
     motif_annotations_sep: str = None,
     windows: list[str] = ["06-08", "10-12", "14-16"],
@@ -67,10 +67,7 @@ def pemutation_analysis(
         motif_ids = annot["id"]
         motif_names = annot["name"]
 
-    # Extract RF importance scores from each tree
-    # TU ZMIENIĆ
-    r = permutation_importance(model, X, y)
-    # tree_importances = [tree.feature_importances_ for tree in model.estimators_]
+    r = permutation_importance(model, X, y, n_repeats=n_repeats, n_jobs=-1)
     
     # Compute mean and std across trees
     mean_importance = r['importances_mean']
@@ -94,7 +91,7 @@ def pemutation_analysis(
         top_df["motif_name"],
         top_df["mean_importance"],
         xerr=top_df["std_importance"],
-        color = "mediumseagreen",
+        color = "navy",
         alpha = 0.8,
         edgecolor="black",
         linewidth=0.6,
@@ -124,22 +121,22 @@ def pemutation_analysis(
     plt.tight_layout()
 
     # Save figure
-    figures_path = f"results/figures/RF_MDI_importance"
+    figures_path = f"results/figures/RF_permutation_importance"
     os.makedirs(figures_path, exist_ok=True)
 
     fig_path = os.path.join(
         figures_path,
-        f"{tissue}_mdi_importance.pdf"
+        f"{tissue}_permutation_importance.pdf"
     )
     plt.savefig(fig_path, dpi=300, format="pdf")
 
     # Save full table
-    data_path = f"results/RF_MDI_importance"
+    data_path = f"results/RF_permutation_importance"
     os.makedirs(data_path, exist_ok=True)
 
     df_path = os.path.join(
         data_path,
-        f"{tissue}_importance_table.csv"
+        f"{tissue}_permutation_importance_table.csv"
     )
     importance_df.to_csv(df_path, index=False)
 
