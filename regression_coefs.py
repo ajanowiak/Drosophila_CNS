@@ -53,8 +53,11 @@ def downsample_features_shap(tissue: str, num_features = None) -> pd.Series:
 def downsample_features(tissue: str, num_features = None) -> pd.Series:
     # Simpler version (relative to XGBoost and SHAP): features are downsampled based on Mean Decrease in Impurity in time-agnostic Random Forest model.
 
-    mdi_importance = pd.read_csv(f"results/RF_MDI_importance/{tissue}_importance_table.csv")
-    sorted_features = mdi_importance.sort_values('mean_importance', ascending=False)["motif_id"]
+    # importance = pd.read_csv(f"results/RF_MDI_importance/{tissue}_importance_table.csv")
+    # sorted_features = importance.sort_values('mean_importance', ascending=False)["motif_id"]
+    
+    importance = pd.read_csv(f"results/RF_permutation_importance/{tissue}_permutation_importance_table.csv")
+    sorted_features = importance.sort_values('abs_mean_importance', ascending=False)["motif_id"]
     
     if num_features:
         return sorted_features[:num_features]
@@ -221,7 +224,7 @@ def main():
         print_timestamp(f"Selected {num_features} features for tissue {tissue} and EPV = {epv}")
 
         # one of two functions here: downsample_features() or downsample_features_shap()
-        downsampled_features = downsample_features_shap(tissue, num_features)
+        downsampled_features = downsample_features(tissue, num_features)
 
         X, y, composite = compose_downsampled_windows(tissue, downsampled_features)
 
