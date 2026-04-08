@@ -11,14 +11,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from utils import compose_windows, print_timestamp
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
-
 
 
 def pemutation_analysis(
     classifier_path: str,
     tissue: str,
-    n_repeats: int = 5,
+    n_repeats: int = 10,
     motif_annotations_path: str = None,
     motif_annotations_sep: str = None,
     windows: list[str] = ["06-08", "10-12", "14-16"],
@@ -38,10 +39,6 @@ def pemutation_analysis(
     Returns:
         importance_df (pd.DataFrame)
     """
-
-    # Load model
-    with open(classifier_path, "rb") as f:
-        model = pickle.load(f)
 
     model_name = "RandomForest"
 
@@ -67,7 +64,28 @@ def pemutation_analysis(
         motif_ids = annot["id"]
         motif_names = annot["name"]
 
-    r = permutation_importance(model, X, y, n_repeats=n_repeats, n_jobs=-1)
+    # Train model and compute importance on the test set. (We need a new model here bc the one trained on the whole dataset just memorized the data)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=0,
+        stratify=composite
+    )
+
+    model = RandomForestClassifier(
+        n_estimators=500,
+        random_state=0,
+        n_jobs=-1
+    )
+
+    model.fit(X_train, y_train)
+
+
+    print("score:", model.score(X_test, y_test))
+
+    r = permutation_importance(model, X_test, y_test, n_repeats=n_repeats, n_jobs=-1)
     
     # Compute mean and std across trees
     mean_importance = r['importances_mean']
@@ -78,8 +96,9 @@ def pemutation_analysis(
         "motif_id": motif_ids,
         "motif_name": motif_names,
         "mean_importance": mean_importance,
+        "abs_mean_importance": np.absolute(mean_importance),
         "std_importance": std_importance
-    }).sort_values("mean_importance", ascending=False)
+    }).sort_values("abs_mean_importance", ascending=False)
 
     # Plot top motifs
     top_df = importance_df.head(top_n_motifs).copy()
@@ -92,17 +111,17 @@ def pemutation_analysis(
         top_df["mean_importance"],
         xerr=top_df["std_importance"],
         color = "navy",
-        alpha = 0.8,
+        alpha = 0.7,
         edgecolor="black",
         linewidth=0.6,
         capsize=4,
         error_kw={"elinewidth": 1, "alpha": 0.7}
     )
 
-    ax.set_xlabel("Mean feature importance across trees", fontsize=11)
+    ax.set_xlabel("Mean feature permutation importance across trees", fontsize=11)
     ax.set_ylabel("")
     ax.set_title(
-        f"Mean feature importance across trees in the Random Forest model\nTissue: {tissue}. Top {top_n_motifs} features",
+        f"Mean permutation importance across trees in the Random Forest model\nTissue: {tissue}. Top {top_n_motifs} features",
         fontsize=13,
         pad=12
     )
