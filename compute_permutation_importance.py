@@ -98,7 +98,7 @@ def pemutation_analysis(
         "mean_importance": mean_importance,
         "abs_mean_importance": np.absolute(mean_importance),
         "std_importance": std_importance
-    }).sort_values("abs_mean_importance", ascending=False)
+    }).sort_values("mean_importance", ascending=False)
 
     # Plot top motifs
     top_df = importance_df.head(top_n_motifs).copy()
