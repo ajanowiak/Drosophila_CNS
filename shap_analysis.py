@@ -1,4 +1,4 @@
-# shap.py
+# shap_analysis.py
 
 import shap
 
@@ -30,9 +30,9 @@ def shap_analysis_with_beeswarm(
     3. Computes SHAP values using an explainer appropriate to the model class
     4. Produces and saves a SHAP beeswarm plot
     5. Constructs and saves a dataframe containing SHAP statistics for ALL motifs:
-       - mean SHAP value
-       - absolute mean SHAP value
-       - standard deviation of SHAP values
+    - mean SHAP value
+    - absolute mean SHAP value
+    - standard deviation of SHAP values
 
     Args:
         classifier_path (str): Path to a trained time-agnostic classifier (.pkl file)
@@ -144,13 +144,28 @@ def shap_analysis_with_beeswarm(
     return shap_df
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Shap analysis. Available models: 'RF', 'XGB', 'SVM', 'LR'"
+    )
+
+    parser.add_argument(
+        "models",
+        nargs="*",
+        choices=["RF", "XGB", "LR", "SVM"],
+        default=["RF", "XGB", "LR", "SVM"],
+        help="Model names to analyze (space-separated). "
+            "Choices: RF XGB LR SVM. "
+            "Default: all models."
+    )
+
+    args = parser.parse_args()
     tissues = ["Neuroblasts", "Neurons", "Glia"]
     # models = ['RF', 'XGB', 'LR', 'SVM'] 
-    models = ['RF', 'XGB'] 
+    # models = ['RF', 'XGB'] 
     annot_path = "data/motif_names.tsv"
 
 
-    for m in models:
+    for m in args.models:
         for t in tissues: 
             print(f"SHAP analysis for model {m} for tissue {t}...")
             _ = shap_analysis_with_beeswarm(
