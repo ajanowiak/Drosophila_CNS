@@ -320,7 +320,7 @@ def train_tissue_expanded(
     ax.legend(loc="lower right")
 
     fig_dir = (
-        f"results/figures/time_agnostic_EXPANDED"
+        f"results/figures/time_agnostic_EXPANDED/"
         f"{short}_expanded"
     )
     os.makedirs(fig_dir, exist_ok=True)
@@ -438,7 +438,7 @@ def main():
         })
 
     summary_df   = pd.DataFrame(rows)
-    summary_dir  = f"results/time_agnostic_expanded/{label_tag}/{short}"
+    summary_dir  = f"results/time_agnostic_expanded/{short}"
     os.makedirs(summary_dir, exist_ok=True)
     summary_path = os.path.join(
         summary_dir, f"cv_aucroc_summary_{short}_expanded.csv"
