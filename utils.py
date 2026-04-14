@@ -1,5 +1,4 @@
 # utils.py
-# these imports are not supposed to execute (they fix annoing text highlighting in my IDE)
 import os
 import pandas as pd
 import numpy as np
