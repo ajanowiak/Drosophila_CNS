@@ -36,7 +36,7 @@ N_SPLITS = 10
 MODEL_PARAMS = {
     "RandomForestClassifier": dict(n_estimators=500, random_state=0, n_jobs=4),
     "SVC":                    dict(probability=True, random_state=0),
-    "LogisticRegression":     dict(max_iter=1000, random_state=0, n_jobs=4, C=np.inf), #UNREGULARIZED
+    "LogisticRegression":     dict(max_iter=1000, random_state=0, n_jobs=4), #, C=np.inf UNREGULARIZED
     "XGBClassifier":          dict(
         n_estimators=500,
         random_state=0,
@@ -312,7 +312,7 @@ def train_tissue_expanded(
         xlabel="False Positive Rate",
         ylabel="True Positive Rate",
         title=(
-            f"Time-agnostic {full} ROC — expanded features ({tissue})\n"
+            f"Time-agnostic {full} ROC: expanded features ({tissue})\n"
             f"AUC = {mean_auc:.3f} ± {std_auc:.3f} \n"
             f"Acc = {mean_acc:.3f} ± {std_acc:.3f}"
         ),
