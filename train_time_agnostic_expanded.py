@@ -301,10 +301,10 @@ def train_tissue_expanded(
     ax.plot(
         mean_fpr, mean_tpr,
         label=f"Mean ROC (AUC = {mean_auc:.3f} ± {std_auc:.3f})",
-        lw=1, alpha=0.8,
+        lw=1, alpha=0.8, color="firebrick",
     )
     ax.fill_between(
-        mean_fpr, tprs_lower, tprs_upper, alpha=0.2, label="± 1 std. dev."
+        mean_fpr, tprs_lower, tprs_upper, alpha=0.2, label="± 1 std. dev.", color="firebrick",
     )
     ax.plot([0, 1], [0, 1], "k--", lw=1)
     ax.grid(axis="both")
@@ -313,20 +313,19 @@ def train_tissue_expanded(
         ylabel="True Positive Rate",
         title=(
             f"Time-agnostic {full} ROC — expanded features ({tissue})\n"
-            f"Features: {label_tag} (curr + prev window)\n"
-            f"AUC = {mean_auc:.3f} ± {std_auc:.3f}  |  "
+            f"AUC = {mean_auc:.3f} ± {std_auc:.3f} \n"
             f"Acc = {mean_acc:.3f} ± {std_acc:.3f}"
         ),
     )
     ax.legend(loc="lower right")
 
     fig_dir = (
-        f"results/figures/AUCROC_for_tissue_filtering/"
-        f"{label_tag}/{short}_expanded"
+        f"results/figures/time_agnostic_EXPANDED"
+        f"{short}_expanded"
     )
     os.makedirs(fig_dir, exist_ok=True)
-    fig_path = os.path.join(fig_dir, f"roc_{short}_expanded_{tissue}.png")
-    plt.savefig(fig_path, dpi=150, bbox_inches="tight")
+    fig_path = os.path.join(fig_dir, f"roc_{short}_expanded_{tissue}.pdf")
+    plt.savefig(fig_path, dpi=300, format="pdf", bbox_inches="tight")
     plt.close()
     print_timestamp(f"[{tissue}] ROC figure saved to {fig_path}")
 
@@ -334,9 +333,9 @@ def train_tissue_expanded(
     all_clf = clone(classifier)
     all_clf.fit(X, y)
 
-    all_dir  = f"results/models/time_agnostic_expanded/{label_tag}/{short}"
+    all_dir  = f"results/models/time_agnostic_expanded/{short}"
     os.makedirs(all_dir, exist_ok=True)
-    all_path = os.path.join(all_dir, f"{short}_expanded_{tissue}.pkl")
+    all_path = os.path.join(all_dir, f"{short}_{tissue}_expanded.pkl")
     pickle.dump(all_clf, open(all_path, "wb"))
     print_timestamp(f"[{tissue}] Full-data model saved to {all_path}")
 
