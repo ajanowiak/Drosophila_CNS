@@ -11,7 +11,7 @@ from sklearn.metrics import roc_curve, auc
 from utils import print_timestamp
 from regression_coefs import (
     num_features_from_epv,
-    downsample_features,
+    downsample_features_shap,
     compose_downsampled_windows,
 )
 
@@ -36,7 +36,7 @@ def train_logit_cv(
     """
     print_timestamp(f"  [{tissue}] EPV={epv}, num_features={num_features}")
     
-    downsampled_features = downsample_features(tissue, num_features, model=model)
+    downsampled_features = downsample_features_shap(tissue, num_features=num_features, model=model)
     X, y, composite = compose_downsampled_windows(tissue, downsampled_features)
     
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
