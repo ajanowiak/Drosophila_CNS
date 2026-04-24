@@ -132,6 +132,7 @@ def main():
                     tissue=tissue,
                     epv=epv,
                     num_features=num_features,
+                    model = model,
                     n_splits=N_SPLITS,
                 )
                 all_results.append(result)
