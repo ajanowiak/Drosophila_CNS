@@ -9,7 +9,7 @@ from statsmodels.stats.multitest import multipletests
 from utils import print_timestamp
 
 
-SUPPORTED_MODELS = ["rf", "lr", "xgb", "svc"]
+SUPPORTED_MODELS = ["rf", "lr", "xgb", "svm"]
 TISSUES = ["Neuroblasts", "Neurons", "Glia"]
 WINDOWS = ["06-08", "10-12", "14-16"]
 
@@ -36,7 +36,7 @@ def num_features_from_epv(tissue: str, epv: int) -> int:
 # SHAP FEATURE SELECTION
 # =========================
 def downsample_features_shap(tissue: str, model: str, num_features=None) -> pd.Series:
-    shap_path = f"results/shap/{model}/{tissue}_shap_table_{model.upper()}.csv"
+    shap_path = f"results/shap/{model.upper()}/{tissue}_shap_table_{model.upper()}.csv"
 
     if not os.path.exists(shap_path):
         raise FileNotFoundError(f"Missing SHAP file: {shap_path}")
