@@ -26,6 +26,7 @@ def train_logit_cv(
     tissue: str,
     epv: int,
     num_features: int,
+    model: str,
     n_splits: int = N_SPLITS,
 ) -> dict:
     """
@@ -35,7 +36,7 @@ def train_logit_cv(
     """
     print_timestamp(f"  [{tissue}] EPV={epv}, num_features={num_features}")
     
-    downsampled_features = downsample_features(tissue, num_features)
+    downsampled_features = downsample_features(tissue, num_features, model=model)
     X, y, composite = compose_downsampled_windows(tissue, downsampled_features)
     
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
@@ -112,7 +113,9 @@ def main():
         default=[2, 5, 10, 15, 20],
         help="EPV (events per variable) values to test (default: 2 5 10 15 20)",
     )
+    parser.add_argument("--model", required=True, choices=["rf", "lr", "xgb", "svc"])
     args = parser.parse_args()
+    model = args.model
     
     print_timestamp(f"=== Training Logit with CV | EPV values: {args.epv_values} ===")
     
@@ -155,7 +158,7 @@ def main():
         ]
         
         # Save results
-        output_dir = "results/logit_regression_cv_aucroc"
+        output_dir = f"results/logit_regression_cv_aucroc/{model}"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, f"{tissue}_logit_cv_results.csv")
         results_df.to_csv(output_path, index=False)

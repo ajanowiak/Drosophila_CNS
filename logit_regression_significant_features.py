@@ -1,6 +1,7 @@
 # logit_regression_significant_features.py
 
 import os
+import argparse
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -18,14 +19,14 @@ N_SPLITS = 10
 P_THRESHOLD = 0.05
 
 
-def extract_significant_features(tissue: str, epv: int = 10) -> pd.Series:
+def extract_significant_features(tissue: str, epv: int = 10, model: str) -> pd.Series:
     """
     Extract feature names (motif_ids) with BH-adjusted p-value < 0.05
     from regression_coefs.py output.
     
     Returns a pd.Series of motif IDs (feature names)
     """
-    data_path = f"results/regression_coefs/epv_{epv}"
+    data_path = f"results/regression_coefs/{model}/epv_{epv}"
     summary_csv = os.path.join(data_path, f"{tissue}_summary.csv")
     
     if not os.path.exists(summary_csv):
@@ -105,6 +106,11 @@ def train_logit_cv_significant(
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", required=True, choices=["rf", "lr", "xgb", "svc"])
+    args = parser.parse_args()
+
+    model = args.model
     # EPV configuration per tissue
     epv_config = {
         "Neuroblasts": 15,
@@ -123,7 +129,7 @@ def main():
         
         try:
             # Extract significant features
-            significant_features = extract_significant_features(tissue, epv)
+            significant_features = extract_significant_features(tissue, epv, model)
             
             if len(significant_features) == 0:
                 print_timestamp(f"  [{tissue}] No significant features found at p < 0.05")
