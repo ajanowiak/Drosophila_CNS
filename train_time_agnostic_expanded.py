@@ -16,7 +16,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_curve, auc, accuracy_score
 from xgboost import XGBClassifier
 
-from utils import print_timestamp
+from utils import print_timestamp, make_names_dict
 
 
 # ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ N_SPLITS = 10
 MODEL_PARAMS = {
     "RandomForestClassifier": dict(n_estimators=500, random_state=0, n_jobs=4),
     "SVC":                    dict(probability=True, random_state=0),
-    "LogisticRegression":     dict(max_iter=1000, random_state=0, n_jobs=4), #, C=np.inf UNREGULARIZED
+    "LogisticRegression":     dict(max_iter=1000, random_state=0, n_jobs=4),
     "XGBClassifier":          dict(
         n_estimators=500,
         random_state=0,
@@ -51,28 +51,12 @@ MODEL_CLASSES = {
     "XGBClassifier":          XGBClassifier,
 }
 
-
-def make_names_dict():
-    """
-    Dictionary for f-string construction in model paths and in text on plots.
-    """
-    model_names = [
-        "RandomForestClassifier",
-        "SVC",
-        "LogisticRegression",
-        "XGBClassifier",
-    ]
-    model_names_dict = {name: {"full": "", "short": ""} for name in model_names}
-    model_names_dict["RandomForestClassifier"]["full"]  = "Random Forest"
-    model_names_dict["RandomForestClassifier"]["short"] = "RF"
-    model_names_dict["SVC"]["full"]                     = "Support Vector Machine"
-    model_names_dict["SVC"]["short"]                    = "SVM"
-    model_names_dict["LogisticRegression"]["full"]      = "Logistic Regression"
-    model_names_dict["LogisticRegression"]["short"]     = "LR"
-    model_names_dict["XGBClassifier"]["full"]           = "XGBoost"
-    model_names_dict["XGBClassifier"]["short"]          = "XGB"
-    return model_names_dict
-
+# Color assigned to each feature-window mode in ROC curve plots
+FEATURE_MODE_COLORS = {
+    "curr":      "steelblue",
+    "prev":      "grey",
+    "curr+prev": "firebrick",
+}
 
 NAMES = make_names_dict()
 
@@ -117,89 +101,99 @@ def _load_labels(label_tag: str, window: str, tissue: str) -> pd.Series:
     return pd.read_csv(path, index_col=0).iloc[:, 0]
 
 
-def compose_windows_expanded(
+def compose_windows(
     tissue: str,
     feature_dir_template: str,
     label_tag: str,
+    feature_mode: str,
 ) -> tuple:
     """
-    Build the expanded feature matrix by horizontally concatenating current-
-    and previous-window enrichment scores for each developmental window.
+    Build the feature matrix for the requested feature_mode across all
+    developmental windows, stacking them vertically for time-agnostic training.
 
-    Feature naming convention
-    -------------------------
-    All columns from the current window are suffixed ``_curr``;
-    all columns from the predecessor window are suffixed ``_prev``.
+    Feature modes
+    -------------
+    "curr"     : only current-window enrichment scores (columns suffixed _curr).
+    "prev"     : only previous-window enrichment scores (columns suffixed _prev).
+    "curr+prev": horizontal concatenation of both (columns suffixed accordingly).
 
     Alignment strategy
     ------------------
     For each main window w:
-      1. Load X_curr (current enrichment) and y (labels) — align on their
-         shared loop index, then drop NaN rows from X_curr.
-      2. Load X_prev (predecessor enrichment) independently.
-      3. Take the three-way intersection of loop indices: X_curr ∩ y ∩ X_prev.
-         Loops missing from *any* of the three are silently dropped.
-      4. Drop rows that still contain NaN in either enrichment matrix.
-      5. Rename columns and concatenate horizontally.
+      1. Load X_curr and y — align on shared loop index, drop NaN rows.
+      2. If prev features are needed, load X_prev and take the three-way
+         intersection of loop indices (X_curr ∩ y ∩ X_prev). Loops missing
+         from any source are silently dropped.
+      3. Drop rows that still contain NaN in any loaded enrichment matrix.
+      4. Rename columns and concatenate horizontally (if both modes).
 
     Args:
         tissue:                tissue label, e.g. "Neuroblasts".
         feature_dir_template:  f-string template with {window} placeholder.
         label_tag:             "neural_labels" or "unfiltered".
+        feature_mode:          one of "curr", "prev", or "curr+prev".
 
     Returns:
-        X          (pd.DataFrame): shape (n_samples, 722), columns suffixed
-                                   _curr / _prev.
+        X          (pd.DataFrame): feature matrix.
         y          (pd.Series):    binary target, same index as X.
         composite  (np.ndarray):   integer codes for composite stratification
                                    (window_index × label), used by
                                    StratifiedKFold to preserve both the
-                                   window origin and class balance in every
-                                   fold.
+                                   window origin and class balance in every fold.
     """
+    use_curr = feature_mode in ("curr", "curr+prev")
+    use_prev = feature_mode in ("prev", "curr+prev")
+
     Xs, ys = [], []
 
     for idx, w in enumerate(WINDOWS):
         prev_w = PREV_WINDOW[w]
 
         X_curr = _load_enrichment(feature_dir_template, w)
-        X_prev = _load_enrichment(feature_dir_template, prev_w)
         y_w    = _load_labels(label_tag, w, tissue)
 
-        shared = X_curr.index.intersection(y_w.index).intersection(X_prev.index)
+        # Base shared index: curr ∩ labels
+        shared = X_curr.index.intersection(y_w.index)
 
-        n_curr_only = len(X_curr.index.intersection(y_w.index)) - len(shared)
-        if n_curr_only > 0:
-            print_timestamp(
-                f"  [{tissue}] hrs{w}: {n_curr_only} loops absent from "
-                f"prev window ({prev_w}) — excluded from expanded dataset"
-            )
+        # Extend intersection to prev if needed
+        if use_prev:
+            X_prev = _load_enrichment(feature_dir_template, prev_w)
+            shared = shared.intersection(X_prev.index)
+
+            n_curr_only = len(X_curr.index.intersection(y_w.index)) - len(shared)
+            if n_curr_only > 0:
+                print_timestamp(
+                    f"  [{tissue}] hrs{w}: {n_curr_only} loops absent from "
+                    f"prev window ({prev_w}) — excluded from dataset"
+                )
 
         X_curr = X_curr.loc[shared]
-        X_prev = X_prev.loc[shared]
         y_w    = y_w.loc[shared]
 
-        nan_mask = X_curr.isna().any(axis=1) | X_prev.isna().any(axis=1)
+        # Build NaN mask across whichever matrices are loaded
+        nan_mask = X_curr.isna().any(axis=1)
+        if use_prev:
+            X_prev = X_prev.loc[shared]
+            nan_mask = nan_mask | X_prev.isna().any(axis=1)
+
         n_dropped = nan_mask.sum()
         if n_dropped > 0:
             print_timestamp(
                 f"  [{tissue}] hrs{w}: dropped {n_dropped} loops with NaN "
-                f"in current or previous enrichment "
                 f"({(~nan_mask).sum()} remaining)"
             )
+
         X_curr = X_curr.loc[~nan_mask]
-        X_prev = X_prev.loc[~nan_mask]
         y_w    = y_w.loc[~nan_mask]
 
-        X_curr = X_curr.add_suffix("_curr")
-        X_prev = X_prev.add_suffix("_prev")
+        # Assemble feature block for this window
+        parts = []
+        if use_curr:
+            parts.append(X_curr.add_suffix("_curr"))
+        if use_prev:
+            parts.append(X_prev.loc[~nan_mask].add_suffix("_prev"))
 
-        X_w = pd.concat([X_curr, X_prev], axis=1)
-
-        assert X_w.shape[1] == X_curr.shape[1] + X_prev.shape[1], (
-            f"Column count mismatch after concat for {tissue} / hrs{w}"
-        )
-
+        X_w = pd.concat(parts, axis=1)
         X_w["_window"] = idx
         Xs.append(X_w)
         ys.append(y_w)
@@ -211,7 +205,7 @@ def compose_windows_expanded(
     X = X.drop(columns=["_window"])
 
     print_timestamp(
-        f"[{tissue}] Expanded feature matrix: {X.shape} | "
+        f"[{tissue}] Feature matrix ({feature_mode}): {X.shape} | "
         f"positives: {y.sum()} / {len(y)}"
     )
 
@@ -222,36 +216,39 @@ def compose_windows_expanded(
 # Training for a single tissue
 # ---------------------------------------------------------------------------
 
-def train_tissue_expanded(
+def train_tissue(
     tissue: str,
     feature_dir_template: str,
     label_tag: str,
     model_name: str,
+    feature_mode: str,
     n_splits: int = N_SPLITS,
 ) -> dict:
     """
-    Cross-validated time-agnostic training with expanded (curr + prev)
-    features for one tissue, supporting any of the four model architectures.
+    Cross-validated time-agnostic training for one tissue.
 
     Args:
         tissue:                tissue label.
         feature_dir_template:  f-string template with {window} placeholder.
         label_tag:             "neural_labels" or "unfiltered".
         model_name:            one of the keys in MODEL_CLASSES.
+        feature_mode:          one of "curr", "prev", or "curr+prev".
         n_splits:              number of CV folds.
 
     Returns:
         dict with tissue name and CV metrics (AUC, accuracy, ROC curve data).
     """
-    short = NAMES[model_name]["short"]
-    full  = NAMES[model_name]["full"]
+    short  = NAMES[model_name]["short"]
+    full   = NAMES[model_name]["full"]
+    color  = FEATURE_MODE_COLORS[feature_mode]
 
     print_timestamp(
-        f"[{tissue}] Starting EXPANDED training — {full} (label_tag={label_tag})..."
+        f"[{tissue}] Starting training — {full} | features={feature_mode} "
+        f"(label_tag={label_tag})..."
     )
 
-    X, y, composite = compose_windows_expanded(
-        tissue, feature_dir_template, label_tag
+    X, y, composite = compose_windows(
+        tissue, feature_dir_template, label_tag, feature_mode
     )
 
     classifier = MODEL_CLASSES[model_name](**MODEL_PARAMS[model_name])
@@ -296,15 +293,16 @@ def train_tissue_expanded(
     tprs_upper   = np.minimum(mean_tpr + np.std(interp_tprs, axis=0), 1)
     tprs_lower   = np.maximum(mean_tpr - np.std(interp_tprs, axis=0), 0)
 
-    # --- ROC figure ---
-    _, ax = plt.subplots(figsize=(6, 6))
+    # --- ROC figure (saved as both PDF and PNG) ---
+    fig, ax = plt.subplots(figsize=(6, 6))
     ax.plot(
         mean_fpr, mean_tpr,
         label=f"Mean ROC (AUC = {mean_auc:.3f} ± {std_auc:.3f})",
-        lw=1, alpha=0.8, color="firebrick",
+        lw=1, alpha=0.8, color=color,
     )
     ax.fill_between(
-        mean_fpr, tprs_lower, tprs_upper, alpha=0.2, label="± 1 std. dev.", color="firebrick",
+        mean_fpr, tprs_lower, tprs_upper,
+        alpha=0.2, label="± 1 std. dev.", color=color,
     )
     ax.plot([0, 1], [0, 1], "k--", lw=1)
     ax.grid(axis="both")
@@ -312,32 +310,37 @@ def train_tissue_expanded(
         xlabel="False Positive Rate",
         ylabel="True Positive Rate",
         title=(
-            f"Time-agnostic {full} ROC: expanded features ({tissue})\n"
+            f"Time-agnostic {full} ROC: {feature_mode} features ({tissue})\n"
             f"AUC = {mean_auc:.3f} ± {std_auc:.3f} \n"
             f"Acc = {mean_acc:.3f} ± {std_acc:.3f}"
         ),
     )
     ax.legend(loc="lower right")
 
-    fig_dir = (
-        f"results/figures/time_agnostic_EXPANDED/"
-        f"{short}_expanded"
-    )
+    # Use a filesystem-safe mode tag (replace "+" with "plus")
+    mode_tag = feature_mode.replace("+", "plus")
+
+    fig_dir = f"results/figures/time_agnostic/{short}_{mode_tag}"
     os.makedirs(fig_dir, exist_ok=True)
-    fig_path = os.path.join(fig_dir, f"roc_{short}_expanded_{tissue}.pdf")
-    plt.savefig(fig_path, dpi=300, format="pdf", bbox_inches="tight")
-    plt.close()
-    print_timestamp(f"[{tissue}] ROC figure saved to {fig_path}")
+
+    for fmt in ("pdf", "png"):
+        fig_path = os.path.join(
+            fig_dir, f"roc_{short}_{mode_tag}_{tissue}.{fmt}"
+        )
+        fig.savefig(fig_path, dpi=300, format=fmt, bbox_inches="tight")
+        print_timestamp(f"[{tissue}] ROC figure ({fmt}) saved to {fig_path}")
+
+    plt.close(fig)
 
     # --- Save full-data model (trained on all samples, used for scoring) ---
     all_clf = clone(classifier)
     all_clf.fit(X, y)
 
-    all_dir  = f"results/models/time_agnostic_expanded/{short}"
-    os.makedirs(all_dir, exist_ok=True)
-    all_path = os.path.join(all_dir, f"{short}_{tissue}_expanded.pkl")
-    pickle.dump(all_clf, open(all_path, "wb"))
-    print_timestamp(f"[{tissue}] Full-data model saved to {all_path}")
+    model_dir = f"results/models/time_agnostic/{short}/{mode_tag}"
+    os.makedirs(model_dir, exist_ok=True)
+    model_path = os.path.join(model_dir, f"{short}_{tissue}_{mode_tag}.pkl")
+    pickle.dump(all_clf, open(model_path, "wb"))
+    print_timestamp(f"[{tissue}] Full-data model saved to {model_path}")
 
     print_timestamp(
         f"[{tissue}] Done — mean AUC={mean_auc:.4f} ± {std_auc:.4f}, "
@@ -364,8 +367,8 @@ def train_tissue_expanded(
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Train time-agnostic classifiers with expanded features "
-            "(current + previous window motif enrichment)."
+            "Train time-agnostic classifiers with selectable feature windows "
+            "(current, previous, or both) and model architecture."
         )
     )
     parser.add_argument(
@@ -373,8 +376,7 @@ def main():
         type=lambda x: x.lower() == "true",
         default=False,
         help=(
-            "Use neural-label-filtered enrichment (True) or "
-            "unfiltered (False)"
+            "Use neural-label-filtered enrichment (True) or unfiltered (False) "
             "(default: False)"
         ),
     )
@@ -382,33 +384,52 @@ def main():
         "--model",
         choices=list(MODEL_CLASSES.keys()),
         default="RandomForestClassifier",
-        help=f"Model architecture to train (default: RandomForestClassifier). \n Choices: {list(MODEL_CLASSES.keys())}",
+        help=(
+            "Model architecture to train (default: RandomForestClassifier). "
+            f"Choices: {list(MODEL_CLASSES.keys())}"
+        ),
+    )
+    parser.add_argument(
+        "--feature_mode",
+        choices=["curr", "prev", "curr+prev"],
+        default="curr+prev",
+        help=(
+            "Which enrichment window(s) to use as features:\n"
+            "  curr     — current window only (columns suffixed _curr)\n"
+            "  prev     — previous window only (columns suffixed _prev)\n"
+            "  curr+prev — both windows concatenated (default)\n"
+        ),
     )
     args = parser.parse_args()
 
-    label_tag  = "neural_labels" if args.filter_labels else "unfiltered"
-    model_name = args.model
-    short      = NAMES[model_name]["short"]
-    full       = NAMES[model_name]["full"]
+    label_tag    = "neural_labels" if args.filter_labels else "unfiltered"
+    model_name   = args.model
+    feature_mode = args.feature_mode
+    short        = NAMES[model_name]["short"]
+    full         = NAMES[model_name]["full"]
+    mode_tag     = feature_mode.replace("+", "plus")
 
     feature_dir_template = f"results/training_data/{label_tag}/hrs{{window}}"
 
     print_timestamp(
-        f"=== Training time-agnostic {full} (EXPANDED) | features: {label_tag} ==="
+        f"=== Training time-agnostic {full} | features={feature_mode} | "
+        f"labels={label_tag} ==="
     )
     print_timestamp(f"Feature directory template: {feature_dir_template}")
-    print_timestamp(
-        "Window → predecessor map: "
-        + ", ".join(f"{k}→{v}" for k, v in PREV_WINDOW.items())
-    )
+    if feature_mode in ("prev", "curr+prev"):
+        print_timestamp(
+            "Window → predecessor map: "
+            + ", ".join(f"{k}→{v}" for k, v in PREV_WINDOW.items())
+        )
 
     # Process tissues in parallel (one worker per tissue)
     results = {}
     with ProcessPoolExecutor(max_workers=len(TISSUES)) as executor:
         futures = {
             executor.submit(
-                train_tissue_expanded,
-                t, feature_dir_template, label_tag, model_name, N_SPLITS,
+                train_tissue,
+                t, feature_dir_template, label_tag,
+                model_name, feature_mode, N_SPLITS,
             ): t
             for t in TISSUES
         }
@@ -427,21 +448,21 @@ def main():
             continue
         r = results[t]
         rows.append({
-            "tissue":    t,
-            "model":     model_name,
-            "label_tag": label_tag,
-            "features":  "curr+prev",
-            "mean_auc":  round(r["mean_auc"], 6),
-            "std_auc":   round(r["std_auc"],  6),
-            "mean_acc":  round(r["mean_acc"], 6),
-            "std_acc":   round(r["std_acc"],  6),
+            "tissue":       t,
+            "model":        model_name,
+            "label_tag":    label_tag,
+            "feature_mode": feature_mode,
+            "mean_auc":     round(r["mean_auc"], 6),
+            "std_auc":      round(r["std_auc"],  6),
+            "mean_acc":     round(r["mean_acc"], 6),
+            "std_acc":      round(r["std_acc"],  6),
         })
 
     summary_df   = pd.DataFrame(rows)
-    summary_dir  = f"results/time_agnostic_expanded/{short}"
+    summary_dir  = f"results/time_agnostic/{short}/{mode_tag}"
     os.makedirs(summary_dir, exist_ok=True)
     summary_path = os.path.join(
-        summary_dir, f"cv_aucroc_summary_{short}_expanded.csv"
+        summary_dir, f"cv_aucroc_summary_{short}_{mode_tag}.csv"
     )
     summary_df.to_csv(summary_path, index=False)
     print_timestamp(f"Summary table saved to {summary_path}")

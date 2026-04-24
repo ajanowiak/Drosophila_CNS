@@ -51,7 +51,6 @@ def compose_windows(tissue, windows=["06-08", "10-12", "14-16"]):
     return X_new, y_new, composite
 
 def make_names_dict():
-    # FIXME: move this to some kind of config
     """
     MODEL TRAINING (metrics plots)
     Dictionary for f-string construction in model paths and in text on plots

@@ -29,14 +29,37 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_curve, auc, accuracy_score
 
-from utils import print_timestamp
+from utils import print_timestamp, make_names_dict
 
 
 WINDOWS   = ["06-08", "10-12", "14-16"]
+PREV_WINDOW = {
+    "06-08": "04-06",
+    "10-12": "08-10",
+    "14-16": "12-14",
+}
 TISSUES   = ["Neuroblasts", "Neurons", "Glia"]
-N_SPLITS  = 10
-RF_PARAMS = dict(n_estimators=500, random_state=0, n_jobs=-1)
+N_SPLITS = 10
 
+MODEL_PARAMS = {
+    "RandomForestClassifier": dict(n_estimators=500, random_state=0, n_jobs=4),
+    "SVC":                    dict(probability=True, random_state=0),
+    "LogisticRegression":     dict(max_iter=1000, random_state=0, n_jobs=4), #, C=np.inf UNREGULARIZED
+    "XGBClassifier":          dict(
+        n_estimators=500,
+        random_state=0,
+        n_jobs=4,
+    ),
+}
+
+MODEL_CLASSES = {
+    "RandomForestClassifier": RandomForestClassifier,
+    "SVC":                    SVC,
+    "LogisticRegression":     LogisticRegression,
+    "XGBClassifier":          XGBClassifier,
+}
+
+NAMES = make_names_dict()
 
 # ---------------------------------------------------------------------------
 # Data loading
@@ -222,21 +245,50 @@ def train_tissue(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Train time-agnostic Random Forest on motif enrichment features."
+        description=("Train time-agnostic Random Forest on motif enrichment features."
+                    "(current or previous window motif enrichment).")
     )
     parser.add_argument(
         "--filter_labels",
         type=lambda x: x.lower() == "true",
-        required=True,
+        default=False,
         help="Use neural-label-filtered enrichment (True) or unfiltered (False)",
     )
+    parser.add_argument(
+        "--model",
+        choices=list(MODEL_CLASSES.keys()),
+        default="RandomForestClassifier",
+        help=f"Model architecture to train (default: RandomForestClassifier). \n Choices: {list(MODEL_CLASSES.keys())}",
+    )
+    parser.add_argument(
+        "--use_current_window",
+        type=lambda x: x.lower() == "true",
+        default=True,
+        help=("Train the time agnostic classifier on the windows that have corresponding HiC annotations (target variable) - True"
+            "or train on the enrichments from the previous time window - False" 
+            "In order to train on both sets of windows, see train_time_agnostic_expanded.py"
+            ) # FIXME: Połączyć te dwa skrypty w jeden
+    )
+    
     args = parser.parse_args()
 
     label_tag = "neural_labels" if args.filter_labels else "unfiltered"
+    model_name = args.model
+    short      = NAMES[model_name]["short"]
+    full       = NAMES[model_name]["full"]
+    
     feature_dir_template = f"results/training_data/{label_tag}/hrs{{window}}"
+    
+    if args.use_current_window:
+        feature_dir_template = f"results/training_data/{label_tag}/hrs{{window}}"
+        target_variable_dir_template = feature_dir_template
+    else:
+        # to formatowanie templatu trzeba bardzo zmienic
+        prev
+        feature_dir_template = 
 
-    print_timestamp(f"=== Training time-agnostic RF | features: {label_tag} ===")
-    print_timestamp(f"Feature directory template: {feature_dir_template}")
+    print_timestamp(f"=== Training time-agnostic {full} | features: {label_tag} ===")
+    # print_timestamp(f"Feature directory template: {feature_dir_template}")
 
     # Process tissues in parallel
     results = {}
