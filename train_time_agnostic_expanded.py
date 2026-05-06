@@ -391,23 +391,22 @@ def main():
     )
     parser.add_argument(
         "--feature_mode",
-        choices=["curr", "prev", "curr+prev"],
-        default="curr+prev",
+        choices=["curr", "prev", "expanded"],
+        default="expanded",
         help=(
             "Which enrichment window(s) to use as features:\n"
             "  curr     — current window only (columns suffixed _curr)\n"
             "  prev     — previous window only (columns suffixed _prev)\n"
-            "  curr+prev — both windows concatenated (default)\n"
+            "  expanded — both windows concatenated (default)\n"
         ),
     )
     args = parser.parse_args()
 
     label_tag    = "neural_labels" if args.filter_labels else "unfiltered"
     model_name   = args.model
-    feature_mode = args.feature_mode
+    mode_tag = args.feature_mode
     short        = NAMES[model_name]["short"]
     full         = NAMES[model_name]["full"]
-    mode_tag     = feature_mode.replace("+", "plus")
 
     feature_dir_template = f"results/training_data/{label_tag}/hrs{{window}}"
 
@@ -416,7 +415,7 @@ def main():
         f"labels={label_tag} ==="
     )
     print_timestamp(f"Feature directory template: {feature_dir_template}")
-    if feature_mode in ("prev", "curr+prev"):
+    if mode_tag in ("prev", "expanded"):
         print_timestamp(
             "Window → predecessor map: "
             + ", ".join(f"{k}→{v}" for k, v in PREV_WINDOW.items())
@@ -429,7 +428,7 @@ def main():
             executor.submit(
                 train_tissue,
                 t, feature_dir_template, label_tag,
-                model_name, feature_mode, N_SPLITS,
+                model_name, mode_tag, N_SPLITS,
             ): t
             for t in TISSUES
         }
@@ -451,7 +450,7 @@ def main():
             "tissue":       t,
             "model":        model_name,
             "label_tag":    label_tag,
-            "feature_mode": feature_mode,
+            "feature_mode": mode_tag,
             "mean_auc":     round(r["mean_auc"], 6),
             "std_auc":      round(r["std_auc"],  6),
             "mean_acc":     round(r["mean_acc"], 6),
