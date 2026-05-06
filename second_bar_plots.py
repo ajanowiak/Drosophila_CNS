@@ -155,9 +155,10 @@ def plot_time_agnostic_comparison(short, full):
     data_curr = load_time_agnostic(short, "curr")
     data_expanded = load_time_agnostic(short, "expanded")
 
+    cmap = cm.get_cmap("Blues")
     COLORS = {
-        "prev": "grey",
-        "curr": "steelblue",
+        "prev": cmap(0.7),
+        "curr": cmap(0.85),
         "expanded": "firebrick"
     }
 
