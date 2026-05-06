@@ -113,7 +113,7 @@ def main():
         default=[2, 5, 10, 15, 20],
         help="EPV (events per variable) values to test (default: 2 5 10 15 20)",
     )
-    parser.add_argument("--model", required=True, choices=["rf", "lr", "xgb", "svc"])
+    parser.add_argument("--model", required=True, choices=["rf", "lr", "xgb", "svm"])
     args = parser.parse_args()
     model = args.model
     
