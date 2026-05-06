@@ -44,11 +44,7 @@ MODEL_PARAMS = {
 NAMES = make_names_dict()
 
 
-# ---------------------------------------------------------------------------
-# Core logic (UNCHANGED behavior)
-# ---------------------------------------------------------------------------
-
-def run_time_specific(model_name):
+def run_time_specific(model_name, window=None):
 
     classifier = MODEL_CLASSES[model_name](**MODEL_PARAMS[model_name])
 
@@ -57,7 +53,9 @@ def run_time_specific(model_name):
 
     print_timestamp(f"=== Time-specific training: {full} ===")
 
-    for w in WINDOWS:
+    windows_to_run = [window] if window else WINDOWS
+
+    for w in windows_to_run:
 
         print_timestamp(f"--- Window hrs{w} ---")
 
@@ -240,10 +238,6 @@ def run_time_specific(model_name):
     print_timestamp("=== Done ===")
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
 def main():
     parser = argparse.ArgumentParser(description="Time-specific classifier training")
     parser.add_argument(
@@ -251,9 +245,16 @@ def main():
         choices=list(MODEL_CLASSES.keys()),
         default="RandomForestClassifier"
     )
+
+    parser.add_argument(
+        "--window",
+        choices=WINDOWS,
+        default=None,
+        help="Train only a specific time window (e.g. 14-16)"
+    )
     args = parser.parse_args()
 
-    run_time_specific(args.model)
+    run_time_specific(args.model, args.window)
 
 
 if __name__ == "__main__":
