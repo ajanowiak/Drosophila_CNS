@@ -17,26 +17,7 @@ BAR_WIDTH = 0.15
 ALPHA1 = 0.6
 ALPHA2 = 0.85
 
-
-# ---------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------
-def parse_args():
-    parser = argparse.ArgumentParser(description="Plot model AUC comparisons")
-
-    parser.add_argument(
-        "--model",
-        required=True,
-        choices=["rf", "svm", "xgb", "lr"],
-        help="Model type"
-    )
-
-    return parser.parse_args()
-
-
-# ---------------------------------------------------------------------
 # Model mapping
-# ---------------------------------------------------------------------
 def resolve_model(model_key):
     mapping = {
         "rf": "RandomForestClassifier",
@@ -54,9 +35,7 @@ def resolve_model(model_key):
     return short, full
 
 
-# ---------------------------------------------------------------------
 # Data loaders
-# ---------------------------------------------------------------------
 def load_time_specific(short):
     data = {t: [] for t in TISSUES}
 
@@ -81,7 +60,6 @@ def load_time_specific(short):
 
 
 def load_time_agnostic(short, mode):
-    # rename expanded → curr+prev for file compatibility
     mode_tag = "currplusprev" if mode == "expanded" else mode
 
     path = f"results/time_agnostic/{short}/{mode_tag}/cv_aucroc_summary_{short}_{mode_tag}.csv"
@@ -102,10 +80,8 @@ def load_time_agnostic(short, mode):
     return data
 
 
-# ---------------------------------------------------------------------
 # Plotting
-# ---------------------------------------------------------------------
-def plot_time_specific_vs_agnostic(short, full, outdir):
+def plot_time_specific_vs_agnostic(short, full):
     ts_data = load_time_specific(short)
     curr_data = load_time_agnostic(short, "curr")
 
@@ -176,7 +152,7 @@ def plot_time_specific_vs_agnostic(short, full, outdir):
 
     plt.close(fig)
 
-def plot_time_agnostic_comparison(short, full, outdir):
+def plot_time_agnostic_comparison(short, full):
     data_prev = load_time_agnostic(short, "prev")
     data_curr = load_time_agnostic(short, "curr")
     data_expanded = load_time_agnostic(short, "expanded")
@@ -245,11 +221,21 @@ def plot_time_agnostic_comparison(short, full, outdir):
 
 
 def main():
-    args = parse_args()
+    parser = argparse.ArgumentParser(description="Plot model AUC comparisons")
+
+    parser.add_argument(
+        "--model",
+        required=True,
+        choices=["rf", "svm", "xgb", "lr"],
+        help="Model type"
+    )
+
+    args = parser.parse_args()
+
     short, full = resolve_model(args.model)
 
-    plot_time_specific_vs_agnostic(short, full, args.outdir)
-    plot_time_agnostic_comparison(short, full, args.outdir)
+    plot_time_specific_vs_agnostic(short, full)
+    plot_time_agnostic_comparison(short, full)
 
 
 if __name__ == "__main__":
