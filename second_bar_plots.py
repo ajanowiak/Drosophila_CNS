@@ -59,9 +59,7 @@ def load_time_specific(short):
     return data
 
 
-def load_time_agnostic(short, mode):
-    mode_tag = "currplusprev" if mode == "expanded" else mode
-
+def load_time_agnostic(short, mode_tag):
     path = f"results/time_agnostic/{short}/{mode_tag}/cv_aucroc_summary_{short}_{mode_tag}.csv"
 
     if not os.path.exists(path):
