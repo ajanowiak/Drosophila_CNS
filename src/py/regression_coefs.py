@@ -10,6 +10,8 @@ from utils import print_timestamp
 import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
 
+#### FIXME: DODAĆ BIN SEARCH I OPCJĘ DO WYBORU bin search albo EPV
+
 def num_features_from_epv(tissue: str, epv: int = 10) -> int:
     """
     Compute the number of events and the optimal number of features to obtain the desired EPV
@@ -51,6 +53,8 @@ def downsample_features_shap(tissue: str, num_features = None) -> pd.Series:
         return sorted_features
 
 def downsample_features(tissue: str, num_features = None) -> pd.Series:
+    #### FIXME: this is obsolete
+    
     # Simpler version (relative to XGBoost and SHAP): features are downsampled based on Mean Decrease in Impurity in time-agnostic Random Forest model.
 
     mdi_importance = pd.read_csv(f"results/RF_MDI_importance/{tissue}_importance_table.csv")
@@ -62,6 +66,12 @@ def downsample_features(tissue: str, num_features = None) -> pd.Series:
         return sorted_features
     
 def compose_downsampled_windows(tissue: str, downsampled_features: pd.Series, windows:list[str] = ["06-08", "10-12", "14-16"]) -> tuple:
+    #### FIXME: funkcja importowana w logit_regression_aucroc.py i logit_regression_significant_features.py
+    ## zastanowić się czy nie można tego ubrać w osobny skrypt tak jak zwykłego compose_windows()
+    ## albo PRZYNAJMNIEJ wyrzucić te funkcję do (JAKIEGOŚ !) utils 
+    
+    # - btw, mogę mieć kilka utils, inny do różnych workflows
+    
     """
     TIME-AGNOSTIC CLASSIFIER
     concatenate window-specific DataFrames and generate a `composite` vector for stratification
@@ -97,6 +107,8 @@ def compose_downsampled_windows(tissue: str, downsampled_features: pd.Series, wi
     X_new.drop('window', axis=1, inplace=True) # we don't want to use 'window' for prediction
 
     return X_new, y_new, composite
+
+#### FIXME: move plotting to another script? 
 
 def plot_coeffs(summary_df, tissue, num_features, output_path=None, top_n=20):
     """
@@ -205,6 +217,7 @@ def main():
     parser.add_argument("--epv", type=int, default=10, help="Events per variable for feature selection (default: 10)")
     args = parser.parse_args()
     
+    #### FIXME: CONFIG !!
     windows = ["06-08", "10-12", "14-16"]
     tissues = ["Neuroblasts", "Neurons", "Glia"]
     model_name = "Logistic Regression"
@@ -214,7 +227,10 @@ def main():
     motif_annotations_path = "data/motif_names.tsv"
     top_n = 20
 
+    #### FIXME: MOVE LOOP TO SNAKEMAKE !!!
     for tissue in tissues:
+
+        #### FIXME: Add logger !!!
         print_timestamp(f"Processing tissue: {tissue}")
         
         num_features = num_features_from_epv(tissue, epv)
@@ -277,6 +293,7 @@ def main():
         # Sort by importance
         summary_df = summary_df.sort_values("coef", key=abs, ascending=False)
 
+        #### FIXME: MOVE PATHS TO CONFIG/ARGS
         # Create output directories
         figures_path = f"results/figures/regression_coefs/epv_{epv}"
         data_path = f"results/regression_coefs/epv_{epv}"

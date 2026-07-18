@@ -1,4 +1,4 @@
-# shap.py
+# shap_analysis.py
 
 import shap
 
@@ -10,6 +10,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from utils import make_names_dict, compose_windows
+
+#### FIXME: (somehow) Add logger
+
 
 def shap_analysis_with_beeswarm(
     classifier_path: str,
@@ -58,11 +61,13 @@ def shap_analysis_with_beeswarm(
         model = pickle.load(f)
 
     # Create name variables for plot titles/labels and file names
+    #### FIXME: (somehow) Load this from config instead!!!!
     model_names = make_names_dict()
     model_key = type(model).__name__
     model_name = model_names[model_key]['full']
     model_short = model_names[model_key]['short']
 
+    #### FIXME: Load the composed .csv into a dataframe instead  
     # Load data
     X, y, composite = compose_windows(tissue, windows)
 
@@ -144,12 +149,15 @@ def shap_analysis_with_beeswarm(
     return shap_df
 
 def main():
+
+    #### FIXME: MOVE TO CONFIG!!!
+    
     tissues = ["Neuroblasts", "Neurons", "Glia"]
     # models = ['RF', 'XGB', 'LR', 'SVM'] 
     models = ['RF', 'XGB'] 
     annot_path = "data/motif_names.tsv"
 
-
+    #### FIXME: MOVE LOOP TO SNAKEMAKE!!!
     for m in models:
         for t in tissues: 
             print(f"SHAP analysis for model {m} for tissue {t}...")

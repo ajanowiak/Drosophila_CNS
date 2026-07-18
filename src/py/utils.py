@@ -1,4 +1,6 @@
 # utils.py
+
+# FIXME: co to ma w ogóle być!?
 # these imports are not supposed to execute (they fix annoing text highlighting in my IDE)
 import os
 import pandas as pd
@@ -13,15 +15,28 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 def print_timestamp(message):
     print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {message}")
 
+#### FIXME: ogarnąć jakoś formatowanie nazw motywów typu: knrl - (M5059-1.02)
+## Chodzi o to, żaby znaleźć wszystkie wystąpienia tego formatowania i mieć do tego jakąś funkcję albo LOOKUP TABLE
+## Można to zrobić jednym rzutem z FIXME dot. make_names_dict():
+
+""" (NIEPEŁNE)
+Wystąpienia formatowania typu: knrl - (M5059-1.02)
+
+- shap_analysis.py
+- logit_regression_significant_features.extract_significant_features()
+- logit_regression_significant_features.main()
+
+"""
+
+
 ###     MODEL TRAINING UTILS
-def compose_windows(tissue, windows=["06-08", "10-12", "14-16"]):
+def compose_windows(tissue, windows=["06-08", "10-12", "14-16"], training_dir="results/training_data/unfiltered"):
     """
     TIME-AGNOSTIC CLASSIFIER
     concatenate window-specific DataFrames and generate a `composite` vector for stratification
     """
     Xs, ys = [], []
-    training_dir = "results/training_data/unfiltered"
-    
+
     for idx, w in enumerate(windows):
     
         curr_X = pd.read_csv(os.path.join(training_dir, f"hrs{w}/motif_enrichment_hrs{w}.csv"), index_col=0)
@@ -69,18 +84,19 @@ def make_names_dict():
 
 ###     MOTIF ENRICHEMENT DATA PREPARATION
 
-def load_window(window: str):
+def load_window(window: str, data_dir: str = "data/new_time"):
     """ 
     Load and clean data (drop missing values while preserving loop and motif labels).
 
     Args:
         window (str): timepoint to process (eg. 'hrs06-08')
+        data_dir (str): directory containing the NNv1 time-matrix TSV files
 
     Returns:
         Two cleaned DataFrames: loops_df, motifs_df (with labels as index/columns)
     """
-    loops_path = f"data/new_time/hrs{window}_NNv1_time_matrix_loops.tsv"
-    motifs_path = f"data/new_time/hrs{window}_NNv1_time_matrix_motifs.tsv"
+    loops_path = os.path.join(data_dir, f"hrs{window}_NNv1_time_matrix_loops.tsv")
+    motifs_path = os.path.join(data_dir, f"hrs{window}_NNv1_time_matrix_motifs.tsv")
 
     print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\t\t Loading data...\n")
     loops_df = pd.read_csv(loops_path, sep='\t', index_col=0)  # First column is loop ID
@@ -148,12 +164,17 @@ def distributions(
     return result
         
 
-def load_window_split_by_tissue(window: str, metadata_df: pd.DataFrame):
+def load_window_split_by_tissue(window: str, metadata_df: pd.DataFrame, data_dir: str = "data/new_time"):
     """
-    returns a dictionary of dataframes
+    Returns a dictionary of (loops_df, motifs_df) tuples keyed by tissue label.
+
+    Args:
+        window (str): timepoint to process (eg. 'hrs06-08')
+        metadata_df (pd.DataFrame): cell metadata with a 'refined_annotation' column
+        data_dir (str): directory containing the NNv1 time-matrix TSV files
     """
-    loops_path = f"data/new_time/hrs{window}_NNv1_time_matrix_loops.tsv"
-    motifs_path = f"data/new_time/hrs{window}_NNv1_time_matrix_motifs.tsv"
+    loops_path = os.path.join(data_dir, f"hrs{window}_NNv1_time_matrix_loops.tsv")
+    motifs_path = os.path.join(data_dir, f"hrs{window}_NNv1_time_matrix_motifs.tsv")
 
     loops_df = pd.read_csv(loops_path, sep="\t", index_col=0)
     motifs_df = pd.read_csv(motifs_path, sep="\t", index_col=0)

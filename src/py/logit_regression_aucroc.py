@@ -8,14 +8,18 @@ import statsmodels.api as sm
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_curve, auc
 
+#### FIXME: LOGGER!!
 from utils import print_timestamp
+
+#### FIXME: funkcję będą w jakimś utils 
+# (albo po prostu potrzebny plik będzie wytwarzany i zapisywany przez inny skrypt JEDNORAZOWO)
 from regression_coefs import (
     num_features_from_epv,
     downsample_features,
     compose_downsampled_windows,
 )
 
-
+#### FIXME: move to CONFIG/Args
 WINDOWS = ["06-08", "10-12", "14-16"]
 TISSUES = ["Neuroblasts", "Neurons", "Glia"]
 N_SPLITS = 10
@@ -116,7 +120,7 @@ def main():
     
     print_timestamp(f"=== Training Logit with CV | EPV values: {args.epv_values} ===")
     
-    
+    #### FIXME: MOVE OUTER LOOP TO SNAKEMAKE !!!
     for tissue in TISSUES:
         all_results = []
         print_timestamp(f"\nProcessing tissue: {tissue}")

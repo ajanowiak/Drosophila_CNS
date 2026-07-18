@@ -9,16 +9,22 @@ from sklearn.metrics import roc_curve, auc
 import matplotlib.pyplot as plt
 from statsmodels.stats.multitest import multipletests
 
+#### FIXME: LOGGER !!
 from utils import print_timestamp
+
+#### FIXME: import will come from elsewhere (some utils) OR the downsampled feature file will be prepared elsewhere
 from regression_coefs import compose_downsampled_windows, plot_coeffs, plot_volcano
 
+#### FIXME: plot_coeffs and plot_volcano will also be handled differently  (utils function)
 
+#### FIXME: CONFIG/Args
 TISSUES = ["Neuroblasts", "Neurons", "Glia"]
 N_SPLITS = 10
 P_THRESHOLD = 0.05
 
 
 def extract_significant_features(tissue: str, epv: int = 10) -> pd.Series:
+    #### FIXME: motif name formatting will be handled by utils function or lookup table !!
     """
     Extract feature names (motif_ids) with BH-adjusted p-value < 0.05
     from regression_coefs.py output.
@@ -64,6 +70,8 @@ def train_logit_cv_significant(
     
     X, y, composite = compose_downsampled_windows(tissue, significant_features)
     
+    #### FIXME: DLACZEGO TU JEST CV A W regression_coefs.py NIE MA !?!?!????
+
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
     
     roc_aucs = []
@@ -101,9 +109,6 @@ def train_logit_cv_significant(
     }
 
 
-
-
-
 def main():
     # EPV configuration per tissue
     epv_config = {
@@ -116,6 +121,7 @@ def main():
     
     print_timestamp(f"=== Training Logit with Significant Features ===")
     
+    #### FIXME: move outer loop to snakemake !!!
     for tissue in TISSUES:
         print_timestamp(f"\nProcessing tissue: {tissue}")
         
@@ -152,6 +158,7 @@ def main():
                 .to_dict()
             )
             
+            #### FIXME: this will be handled by utils function or lookup table
             # Create mapping for display
             mapped_columns = pd.Series(index=X.columns, dtype=str)
             for col in X.columns:
@@ -171,6 +178,8 @@ def main():
             # Prepare summary with p-values and confidence intervals
             p_vals_unadjusted = res_full.pvalues
             _, p_vals_bh, _, _ = multipletests(p_vals_unadjusted, method="fdr_bh")  # Benjamini-Hochberg
+            
+            #### FIXME: remove tsbh
             _, p_vals_tsbh, _, _ = multipletests(p_vals_unadjusted, method="fdr_tsbh") # two stage Benjamini-Hochberg
             
             summary_df = pd.DataFrame({
