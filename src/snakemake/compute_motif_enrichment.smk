@@ -20,7 +20,7 @@ rule compute_motif_enrichment:
 
     shell:
         """
-        PYTHONPATH=src/py python src/py/prepare_data/compute_motif_enrichment.py \
+        PYTHONPATH=src/py python src/py/00_prepare_data/compute_motif_enrichment.py \
             --window {wildcards.window} \
             --filtering_mode {wildcards.filtering_mode} \
             --metadata_path {input.metadata} \
