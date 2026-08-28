@@ -3,9 +3,6 @@ from enum import Enum
 
 # Constants
 
-WINDOWS = ['06-08', '10-12', '14-16']
-WINDOWS_PREV = ["04-06", "08-10", "12-14"]
-
 ACTIVITY_PROFILES = ["1-1", "1-0", "0-1", "0-0"]
 
 NEURAL_LABELS_RAW = [
@@ -17,6 +14,8 @@ NEURAL_LABELS = ['Brain','Neural','Ventral nerve cord',
                  'Ventral nerve cord prim.','Glia','PNS & sense'
                  ]
 
+WINDOWS = ["06-08", "10-12", "14-16"]
+TISSUES = ["Neuroblasts", "Neurons", "Glia"]
 
 # Enums
 class FilteringMode(Enum):
