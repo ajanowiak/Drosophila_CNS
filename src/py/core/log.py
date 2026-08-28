@@ -1,24 +1,21 @@
 # log.py
-import logging
 import sys
+import logging
 from pathlib import Path
 
 
-def configure_logging(log_path: Path) -> logging.Logger:
-    """
-    Configure the root logger to write to both stdout and a log file.
+def configure_logging(
+    log_path: Path,
+    log_level: int = logging.INFO
+) -> None:
+    """Configure logging to stdout and a log file."""
 
-    Args:
-        log_path: Path to the log file. Parent directories are created if needed.
-
-    Returns:
-        The configured root logger.
-    """
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    logger.handlers.clear()
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    root_logger.handlers.clear()
 
     formatter = logging.Formatter(
         fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -31,7 +28,5 @@ def configure_logging(log_path: Path) -> logging.Logger:
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(formatter)
 
-    logger.addHandler(file_handler)
-    logger.addHandler(stream_handler)
-
-    return logger
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(stream_handler)

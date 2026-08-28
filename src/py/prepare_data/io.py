@@ -54,28 +54,32 @@ def load_window(
     Returns:
         Dictionary mapping group names to ``(loops_df, motifs_df)`` tuples.
     """
+
+    def load_df(path: Path, label: str = 'loops') -> pd.DataFrame:
+
+        logger.info(f"Loading {label} data for window {window}")
+        df = pd.read_csv(loops_path, sep="\t", index_col=0)
+
+        logger.info(f"Converting the {label} matrix to numeric values and removing invalid cells")
+        df = df.apply(pd.to_numeric, errors="coerce").dropna(axis=1)
+
+        return df
+
     loops_path = data_dir / f"hrs{window}_NNv1_time_matrix_loops.tsv"
     motifs_path = data_dir / f"hrs{window}_NNv1_time_matrix_motifs.tsv"
 
-    logger.info(f"Loading data for window {window}")
-
-    loops_df = pd.read_csv(loops_path, sep="\t", index_col=0)
-    motifs_df = pd.read_csv(motifs_path, sep="\t", index_col=0)
-
-    logger.info("Converting matrices to numeric values and removing invalid cells")
-
-    loops_df = loops_df.apply(pd.to_numeric, errors="coerce").dropna(axis=1)
-    motifs_df = motifs_df.apply(pd.to_numeric, errors="coerce").dropna(axis=1)
+    loops_df = load_df(loops_path, label="loops")
+    motifs_df = load_df(motifs_path, label="motifs")
 
     common_cells = loops_df.columns.intersection(motifs_df.columns)
 
-    loops_df = loops_df[common_cells]
-    motifs_df = motifs_df[common_cells]
+    loops_df, motifs_df = loops_df[common_cells], motifs_df[common_cells]
 
     assert loops_df.columns.equals(motifs_df.columns), (
         "Loop and motif matrices contain different cell columns."
     )
 
+    # expected filtering mode is UNFILTERED
     if filtering_mode == FilteringMode.UNFILTERED:
         return {
             "unfiltered": (
@@ -89,6 +93,7 @@ def load_window(
             "metadata_df must be provided when using annotation-based filtering."
         )
 
+    # the other filtering modes were only necessary for scripts that are now obsolete
     if filtering_mode == FilteringMode.NEURAL_LABELS:
         neural_cells = metadata_df.loc[
             metadata_df["refined_annotation"].isin(NEURAL_LABELS)
@@ -154,6 +159,7 @@ def save_enrichment_matrix(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # sort loops according to numerical order instead of lexicographic order (eg. L2 before L10)
     enrichment_df = enrichment_df.sort_index(
         key=lambda idx: idx.astype(str).str.extract(r"(\d+)").astype(int)[0]
     )
