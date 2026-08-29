@@ -41,6 +41,12 @@ tissues:
   - "Neurons"
   - "Glia"
 
+models:
+  - "RF"
+  - "SVM"
+  - "LR"
+  - "XGB"
+
 epv_values:
   - 2
   - 5

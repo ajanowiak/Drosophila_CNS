@@ -1,4 +1,4 @@
-# 00_prepare_data/io.py
+# prapare_data/io.py
 
 import logging
 from pathlib import Path

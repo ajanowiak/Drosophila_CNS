@@ -1,4 +1,4 @@
-# train_time_agnostic.py
+# train_full_models/train_time_agnostic.py
 
 # Trains time-agnostic Random Forest classifiers using the motif enrichment
 # difference matrix as features (neural_labels or unfiltered, controlled by --filter_labels).
@@ -29,8 +29,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_curve, auc, accuracy_score
 
-from utils import print_timestamp
-
 
 WINDOWS   = ["06-08", "10-12", "14-16"]
 TISSUES   = ["Neuroblasts", "Neurons", "Glia"]
@@ -38,9 +36,7 @@ N_SPLITS  = 10
 RF_PARAMS = dict(n_estimators=500, random_state=0, n_jobs=-1)
 
 
-# ---------------------------------------------------------------------------
 # Data loading
-# ---------------------------------------------------------------------------
 
 def compose_windows_enrichment(tissue: str, feature_dir_template: str, label_tag: str) -> tuple:
     """
@@ -80,7 +76,7 @@ def compose_windows_enrichment(tissue: str, feature_dir_template: str, label_tag
         X_w = X_w.dropna(axis=0)
         after  = len(X_w)
         if before != after:
-            print_timestamp(
+            print(
                 f"  [{tissue}] hrs{w}: dropped {before - after} loops with NaN features "
                 f"({after} remaining)"
             )
@@ -100,9 +96,7 @@ def compose_windows_enrichment(tissue: str, feature_dir_template: str, label_tag
     return X, y, composite
 
 
-# ---------------------------------------------------------------------------
 # Training for a single tissue
-# ---------------------------------------------------------------------------
 
 def train_tissue(
     tissue: str,
@@ -116,10 +110,10 @@ def train_tissue(
 
     Returns a dict with tissue name and CV metrics.
     """
-    print_timestamp(f"[{tissue}] Starting training (label_tag={label_tag})...")
+    print(f"[{tissue}] Starting training (label_tag={label_tag})...")
 
     X, y, composite = compose_windows_enrichment(tissue, feature_dir_template, label_tag)
-    print_timestamp(f"[{tissue}] Data shape after NaN drop: {X.shape}, positives: {y.sum()}")
+    print(f"[{tissue}] Data shape after NaN drop: {X.shape}, positives: {y.sum()}")
 
     classifier = RandomForestClassifier(**params)
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
@@ -191,7 +185,7 @@ def train_tissue(
     fig_path = os.path.join(fig_dir, f"roc_RF_{tissue}.png")
     plt.savefig(fig_path, dpi=150, bbox_inches="tight")
     plt.close()
-    print_timestamp(f"[{tissue}] ROC figure saved to {fig_path}")
+    print(f"[{tissue}] ROC figure saved to {fig_path}")
 
     # --- Save all-data model ---
     all_clf = clone(classifier)
@@ -202,7 +196,7 @@ def train_tissue(
     all_path = os.path.join(all_dir, f"RF_{tissue}.pkl")
     pickle.dump(all_clf, open(all_path, "wb"))
 
-    print_timestamp(
+    print(
         f"[{tissue}] Done — mean AUC={mean_auc:.4f} ± {std_auc:.4f}, "
         f"mean Acc={mean_acc:.4f} ± {std_acc:.4f}"
     )
@@ -235,8 +229,8 @@ def main():
     label_tag = "neural_labels" if args.filter_labels else "unfiltered"
     feature_dir_template = f"results/training_data/{label_tag}/hrs{{window}}"
 
-    print_timestamp(f"=== Training time-agnostic RF | features: {label_tag} ===")
-    print_timestamp(f"Feature directory template: {feature_dir_template}")
+    print(f"=== Training time-agnostic RF | features: {label_tag} ===")
+    print(f"Feature directory template: {feature_dir_template}")
 
     # Process tissues in parallel
     results = {}
@@ -252,7 +246,7 @@ def main():
             try:
                 results[t] = fut.result()
             except Exception as e:
-                print_timestamp(f"[{t}] FAILED: {e}")
+                print(f"[{t}] FAILED: {e}")
                 raise
 
     # --- Summary AUCROC table ---
@@ -275,10 +269,10 @@ def main():
     os.makedirs(summary_dir, exist_ok=True)
     summary_path = os.path.join(summary_dir, "cv_aucroc_summary_RF.csv")
     summary_df.to_csv(summary_path, index=False)
-    print_timestamp(f"Summary table saved to {summary_path}")
+    print(f"Summary table saved to {summary_path}")
 
     print("\n" + summary_df.to_string(index=False))
-    print_timestamp("=== All done ===")
+    print("=== All done ===")
 
 
 if __name__ == "__main__":

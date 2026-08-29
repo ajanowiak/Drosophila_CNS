@@ -20,7 +20,7 @@ rule extract_loop_presence_vectors:
 
     shell:
         """
-        PYTHONPATH=src/py python src/py/00_prepare_data/extract_loop_presence_vectors.py \
+        PYTHONPATH=src/py python src/py/prapare_data/extract_loop_presence_vectors.py \
             --window {wildcards.window} \
             --tissue {wildcards.tissue} \
             --filtering_mode {wildcards.filtering_mode} \

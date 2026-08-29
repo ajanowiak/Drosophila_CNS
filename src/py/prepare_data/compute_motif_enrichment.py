@@ -1,4 +1,4 @@
-# 00_prepare_data/compute_motif_enrichment.py
+# prapare_data/compute_motif_enrichment.py
 
 import argparse
 import logging
@@ -9,7 +9,7 @@ import pandas as pd
 
 from core.log import configure_logging
 from core.constants import WINDOWS, FilteringMode
-from 00_prepare_data.io import load_window, load_metadata, save_enrichment_matrix, save_global_count_table
+from prapare_data.io import load_window, load_metadata, save_enrichment_matrix, save_global_count_table
 
 logger = logging.getLogger(__name__)
 

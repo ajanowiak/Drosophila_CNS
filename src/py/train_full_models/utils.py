@@ -1,7 +1,5 @@
 # utils.py
 
-# FIXME: co to ma w ogóle być!?
-# these imports are not supposed to execute (they fix annoing text highlighting in my IDE)
 import os
 import pandas as pd
 import numpy as np
@@ -9,7 +7,6 @@ from collections import defaultdict
 from collections.abc import Callable
 import tqdm
 import datetime
-from scipy.stats import wasserstein_distance
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def print_timestamp(message):
@@ -82,7 +79,7 @@ def make_names_dict():
 
     return model_names_dict
 
-###     MOTIF ENRICHEMENT DATA PREPARATION
+###     MOTIF ENRICHMENT DATA PREPARATION
 
 def load_window(window: str, data_dir: str = "data/new_time"):
     """ 

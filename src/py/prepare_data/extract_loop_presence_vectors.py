@@ -1,4 +1,4 @@
-# 00_prepare_data/extract_loop_presence_vectors.py
+# prapare_data/extract_loop_presence_vectors.py
 
 """
 Extracts the binary loop-presence vector (ML training target) for a single
