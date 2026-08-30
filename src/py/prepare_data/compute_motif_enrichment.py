@@ -9,7 +9,7 @@ import pandas as pd
 
 from core.log import configure_logging
 from core.constants import WINDOWS, FilteringMode
-from prapare_data.io import load_window, load_metadata, save_enrichment_matrix, save_global_count_table
+from prepare_data.io import load_window, load_metadata, save_enrichment_matrix, save_global_count_table
 
 logger = logging.getLogger(__name__)
 

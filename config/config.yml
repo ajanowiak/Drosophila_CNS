@@ -1,30 +1,4 @@
-#
-#  Global parameters
-#
-
-# paths:
-#   projectpath: /home/ajank/project_template
-#   datadir: data
-#   genomedatadir: data/genome
-#   resultsdir: results
-#   configdir: config
-#   envdir: env
-#   tmpdir: tmp
-#   srcdir: src
-#   shellsrcdir: src/sh
-#   pysrcdir: src/python
-#   Rsrcdir: src/R
-#   snakemakesrcdir: src/snakemake
-
-# genome: # if the project uses a single genome assembly
-#   symbol: "dm6"
-#   chromosomes: "chr2L chr2R chr3L chr3R chr4 chrX chrY"
-#   fasta: "data/genome/D.melanogaster/dm6/ucsc/fasta/dm6.fa"
-#   chrom_sizes: "data/genome/D.melanogaster/dm6/ucsc/fasta/dm6.chrom.sizes"
-
-#
-#  More parameters here
-#
+# config/config.yml
 
 windows:
   - "06-08"
@@ -46,6 +20,41 @@ models:
   - "SVM"
   - "LR"
   - "XGB"
+
+feature_modes:
+  - "curr"
+  - "prev"
+  - "expanded"
+
+n_splits: 10
+
+comparisons:
+  - "time_specific_vs_agnostic"
+  - "curr_prev_expanded"
+
+plot_colors:
+  feature_mode:
+    curr: "steelblue"
+    prev: "grey"
+    expanded: "firebrick"
+  time_specific_vs_agnostic:
+    time_specific_1: "#7fb9da"
+    time_specific_2: "#5ba3d0"
+    time_specific_3: "#3b8bc2"
+    curr: "#0d57a1"
+  curr_prev_expanded:
+    prev: "#2e7ebc"
+    curr: "#0d57a1"
+    expanded: "firebrick"
+
+plot_style:
+  bar_width: 0.15
+  time_specific_vs_agnostic:
+    grouped_alpha: 0.6
+    highlight_alpha: 0.85
+  curr_prev_expanded:
+    grouped_alpha: 0.6
+    highlight_alpha: 0.7
 
 epv_values:
   - 2

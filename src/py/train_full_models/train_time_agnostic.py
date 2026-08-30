@@ -1,278 +1,116 @@
-# train_full_models/train_time_agnostic.py
+# train_time_agnostic.py
 
-# Trains time-agnostic Random Forest classifiers using the motif enrichment
-# difference matrix as features (neural_labels or unfiltered, controlled by --filter_labels).
-#
-# Key differences from train.ipynb:
-#   - Features: motif enrichment matrix (neural or unfiltered)
-#   - Missing loops (rows with any NaN) are dropped before training
-#   - Only Random Forest, only time-agnostic models
-#   - Tissues are processed in parallel (ProcessPoolExecutor)
-#   - Records mean CV AUCROC to a summary CSV for later comparison
-#
-# Usage:
-#   python3 train_time_agnostic.py --filter_labels True   # neural_labels features
-#   python3 train_time_agnostic.py --filter_labels False  # unfiltered features
+"""
+Trains one binary classifier for a single (model, tissue, feature_mode) on a
+dataset stacked across all three developmental windows -- covers both the
+time-agnostic and expanded time-agnostic training modes.
 
-import os
+feature_mode selects which window's enrichment scores feed each classifier:
+curr (time-agnostic), prev, or expanded (curr and prev concatenated).
+
+Inputs:
+  - results/training_data/unfiltered/hrs<window>/motif_enrichment_hrs<window>.csv
+  - results/training_data/unfiltered/hrs<window>/y_<tissue>.csv
+
+Outputs:
+  - results/models/time_agnostic/<model>/<feature_mode>/<model>_<tissue>_<feature_mode>.pkl
+  - results/figures/time_agnostic/<model>_<feature_mode>/roc_<model>_<feature_mode>_<tissue>.{pdf,png}
+  - results/time_agnostic/<model>/<feature_mode>/cv_aucroc_summary_<model>_<feature_mode>_<tissue>.csv
+"""
+
 import argparse
-import pickle
-import numpy as np
-import pandas as pd
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+import logging
+from pathlib import Path
 
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from sklearn.base import clone
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import roc_curve, auc, accuracy_score
+
+from core.config import load_config
+from core.constants import MODELS, TIME_AGNOSTIC_MODEL_PARAMS, FeatureMode
+from core.features import stack_windows
+from core.log import configure_logging
+from cv import cross_validate, fit_full_data_model
+from train_full_models.io import save_model, save_summary_row
+from plotting import plot_roc
+
+logger = logging.getLogger(__name__)
 
 
-WINDOWS   = ["06-08", "10-12", "14-16"]
-TISSUES   = ["Neuroblasts", "Neurons", "Glia"]
-N_SPLITS  = 10
-RF_PARAMS = dict(n_estimators=500, random_state=0, n_jobs=-1)
-
-
-# Data loading
-
-def compose_windows_enrichment(tissue: str, feature_dir_template: str, label_tag: str) -> tuple:
+def run_time_agnostic(model: str, tissue: str, feature_mode: FeatureMode, n_splits: int) -> dict:
     """
-    Concatenate enrichment matrices across windows, align with tissue labels,
-    drop NaN rows, and build a composite stratification vector.
-
-    Args:
-        tissue: tissue label, e.g. "Neuroblasts"
-        feature_dir_template: f-string template with {window} placeholder,
-                              e.g. "results/training_data/neural_labels/hrs{window}"
+    Cross-validate and fit a single classifier for one (model, tissue, feature_mode).
 
     Returns:
-        X (pd.DataFrame), y (pd.Series), composite (np.ndarray of codes)
+        Summary dict with tissue, model, feature_mode, and CV metrics.
     """
-    Xs, ys = [], []
+    classifier = MODELS[model]["class"](**TIME_AGNOSTIC_MODEL_PARAMS[model])
+    full = MODELS[model]["full"]
+    mode_tag = feature_mode.value
+    color = load_config()["plot_colors"]["feature_mode"][mode_tag]
 
-    for idx, w in enumerate(WINDOWS):
-        feature_dir  = feature_dir_template.format(window=w)
-        enrich_path  = os.path.join(feature_dir, f"motif_enrichment_hrs{w}.csv")
-        y_path       = f"results/training_data/{label_tag}/hrs{w}/y_{tissue}.csv"
+    logger.info(f"Time-agnostic training: {full} | {tissue} | {mode_tag}")
 
-        if not os.path.exists(enrich_path):
-            raise FileNotFoundError(f"Enrichment file not found: {enrich_path}")
-        if not os.path.exists(y_path):
-            raise FileNotFoundError(f"Label file not found: {y_path}")
+    X, y, composite = stack_windows(tissue, feature_mode=feature_mode)
 
-        X_w = pd.read_csv(enrich_path, index_col=0)
-        y_w = pd.read_csv(y_path,      index_col=0).iloc[:, 0]
+    splitter = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
+    result = cross_validate(classifier, X, y, splitter, stratify_target=composite)
 
-        # Align on shared loops
-        shared = X_w.index.intersection(y_w.index)
-        X_w = X_w.loc[shared]
-        y_w = y_w.loc[shared]
-
-        # Drop loops (rows) that have any NaN feature
-        before = len(X_w)
-        X_w = X_w.dropna(axis=0)
-        after  = len(X_w)
-        if before != after:
-            print(
-                f"  [{tissue}] hrs{w}: dropped {before - after} loops with NaN features "
-                f"({after} remaining)"
-            )
-        y_w = y_w.loc[X_w.index]
-
-        # Tag with window index for stratification
-        X_w["_window"] = idx
-        Xs.append(X_w)
-        ys.append(y_w)
-
-    X = pd.concat(Xs, axis=0)
-    y = pd.concat(ys, axis=0)
-
-    composite = pd.Categorical(list(zip(X["_window"], y))).codes
-    X = X.drop(columns=["_window"])
-
-    return X, y, composite
-
-
-# Training for a single tissue
-
-def train_tissue(
-    tissue: str,
-    feature_dir_template: str,
-    label_tag: str,          # "neural_labels" or "unfiltered" — used in paths
-    n_splits: int = N_SPLITS,
-    params: dict = RF_PARAMS,
-) -> dict:
-    """
-    Cross-validated time-agnostic RF training for one tissue.
-
-    Returns a dict with tissue name and CV metrics.
-    """
-    print(f"[{tissue}] Starting training (label_tag={label_tag})...")
-
-    X, y, composite = compose_windows_enrichment(tissue, feature_dir_template, label_tag)
-    print(f"[{tissue}] Data shape after NaN drop: {X.shape}, positives: {y.sum()}")
-
-    classifier = RandomForestClassifier(**params)
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
-
-    probs, trues, accs = [], [], []
-    fold_index = {}
-
-    for i, (train_idx, test_idx) in enumerate(skf.split(X, composite)):
-        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
-        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
-        fold_index[i] = (train_idx, test_idx)
-
-        clf = clone(classifier)
-        clf.fit(X_train, y_train)
-
-        p = clf.predict_proba(X_test)[:, 1]
-        probs.append(p)
-        trues.append(y_test.values)
-        accs.append(accuracy_score(y_test, (p > 0.5).astype(int)))
-
-    # --- ROC metrics ---
-    mean_acc = np.mean(accs)
-    std_acc  = np.std(accs)
-
-    fprs, tprs, roc_aucs = [], [], []
-    for true, prob in zip(trues, probs):
-        fpr, tpr, _ = roc_curve(true, prob)
-        fprs.append(fpr)
-        tprs.append(tpr)
-        roc_aucs.append(auc(fpr, tpr))
-
-    mean_fpr = np.linspace(0, 1, 100)
-    interp_tprs = []
-    for idx in range(n_splits):
-        interp_tpr = np.interp(mean_fpr, fprs[idx], tprs[idx])
-        interp_tpr[0] = 0.0
-        interp_tprs.append(interp_tpr)
-
-    mean_tpr      = np.mean(interp_tprs, axis=0)
-    mean_tpr[-1]  = 1.0
-    mean_auc      = auc(mean_fpr, mean_tpr)
-    std_auc       = np.std(roc_aucs)
-    tprs_upper    = np.minimum(mean_tpr + np.std(interp_tprs, axis=0), 1)
-    tprs_lower    = np.maximum(mean_tpr - np.std(interp_tprs, axis=0), 0)
-
-    # --- ROC figure ---
-    _, ax = plt.subplots(figsize=(6, 6))
-    ax.plot(
-        mean_fpr, mean_tpr,
-        label=f"Mean ROC (AUC = {mean_auc:.3f} ± {std_auc:.3f})",
-        lw=1, alpha=0.8,
-    )
-    ax.fill_between(mean_fpr, tprs_lower, tprs_upper, alpha=0.2, label="± 1 std. dev.")
-    ax.plot([0, 1], [0, 1], "k--", lw=1)
-    ax.grid(axis="both")
-    ax.set(
-        xlabel="False Positive Rate",
-        ylabel="True Positive Rate",
+    fig_dir = f"results/figures/time_agnostic/{model}_{mode_tag}"
+    plot_roc(
+        result,
         title=(
-            f"Time-agnostic RF ROC ({tissue})\n"
-            f"Features: {label_tag}\n"
-            f"AUC = {mean_auc:.3f} ± {std_auc:.3f}  |  Acc = {mean_acc:.3f} ± {std_acc:.3f}"
+            f"Time-agnostic {full} ROC: {mode_tag} features ({tissue})\n"
+            f"AUC = {result.mean_auc:.3f} ± {result.std_auc:.3f}\n"
+            f"Acc = {result.mean_acc:.3f} ± {result.std_acc:.3f}"
         ),
+        out_paths=[
+            Path(fig_dir) / f"roc_{model}_{mode_tag}_{tissue}.{fmt}"
+            for fmt in ("pdf", "png")
+        ],
+        color=color,
+        line_alpha=0.8,
+        line_label=f"Mean ROC (AUC = {result.mean_auc:.3f} ± {result.std_auc:.3f})",
+        fill_label="± 1 std. dev.",
     )
-    ax.legend(loc="lower right")
+    logger.info(f"[{tissue}] ROC figure saved to {fig_dir}")
 
-    fig_dir = f"results/figures/AUCROC_for_tissue_filtering/{label_tag}/RF"
-    os.makedirs(fig_dir, exist_ok=True)
-    fig_path = os.path.join(fig_dir, f"roc_RF_{tissue}.png")
-    plt.savefig(fig_path, dpi=150, bbox_inches="tight")
-    plt.close()
-    print(f"[{tissue}] ROC figure saved to {fig_path}")
+    all_clf = fit_full_data_model(classifier, X, y)
+    model_dir = f"results/models/time_agnostic/{model}/{mode_tag}"
+    save_model(all_clf, f"{model_dir}/{model}_{tissue}_{mode_tag}.pkl")
+    logger.info(f"[{tissue}] Full-data model saved to {model_dir}")
 
-    # --- Save all-data model ---
-    all_clf = clone(classifier)
-    all_clf.fit(X, y)
-
-    all_dir  = f"results/models/time_agnostic_with_filtering/{label_tag}"
-    os.makedirs(all_dir, exist_ok=True)
-    all_path = os.path.join(all_dir, f"RF_{tissue}.pkl")
-    pickle.dump(all_clf, open(all_path, "wb"))
-
-    print(
-        f"[{tissue}] Done — mean AUC={mean_auc:.4f} ± {std_auc:.4f}, "
-        f"mean Acc={mean_acc:.4f} ± {std_acc:.4f}"
-    )
-
-    return {
-        "tissue":    tissue,
-        "mean_auc":  mean_auc,
-        "std_auc":   std_auc,
-        "mean_acc":  mean_acc,
-        "std_acc":   std_acc,
-        "mean_fpr":  mean_fpr,
-        "mean_tpr":  mean_tpr,
-        "tprs_upper": tprs_upper,
-        "tprs_lower": tprs_lower,
+    summary_row = {
+        "tissue": tissue,
+        "model": model,
+        "feature_mode": mode_tag,
+        "mean_auc": round(result.mean_auc, 6),
+        "std_auc": round(result.std_auc, 6),
+        "mean_acc": round(result.mean_acc, 6),
+        "std_acc": round(result.std_acc, 6),
     }
 
+    summary_path = f"results/time_agnostic/{model}/{mode_tag}/cv_aucroc_summary_{model}_{mode_tag}_{tissue}.csv"
+    save_summary_row(summary_row, summary_path)
+    logger.info(f"Saved summary: {summary_path}")
 
-def main():
+    return summary_row
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Train time-agnostic Random Forest on motif enrichment features."
+        description="Time-agnostic classifier training (curr / prev / expanded feature modes)"
     )
+    parser.add_argument("--model", required=True, choices=list(MODELS.keys()))
+    parser.add_argument("--tissue", required=True, help="Tissue name, e.g. Glia")
     parser.add_argument(
-        "--filter_labels",
-        type=lambda x: x.lower() == "true",
-        required=True,
-        help="Use neural-label-filtered enrichment (True) or unfiltered (False)",
+        "--feature_mode", type=FeatureMode, choices=list(FeatureMode), required=True
     )
+    parser.add_argument("--n_splits", type=int, required=True)
+    parser.add_argument("--log_path", type=Path, required=True)
     args = parser.parse_args()
 
-    label_tag = "neural_labels" if args.filter_labels else "unfiltered"
-    feature_dir_template = f"results/training_data/{label_tag}/hrs{{window}}"
-
-    print(f"=== Training time-agnostic RF | features: {label_tag} ===")
-    print(f"Feature directory template: {feature_dir_template}")
-
-    # Process tissues in parallel
-    results = {}
-    with ProcessPoolExecutor(max_workers=len(TISSUES)) as executor:
-        futures = {
-            executor.submit(
-                train_tissue, t, feature_dir_template, label_tag, N_SPLITS
-            ): t
-            for t in TISSUES
-        }
-        for fut in as_completed(futures):
-            t = futures[fut]
-            try:
-                results[t] = fut.result()
-            except Exception as e:
-                print(f"[{t}] FAILED: {e}")
-                raise
-
-    # --- Summary AUCROC table ---
-    rows = []
-    for t in TISSUES:
-        if t not in results:
-            continue
-        r = results[t]
-        rows.append({
-            "tissue":         t,
-            "label_tag":      label_tag,
-            "mean_auc":       round(r["mean_auc"], 6),
-            "std_auc":        round(r["std_auc"],  6),
-            "mean_acc":       round(r["mean_acc"], 6),
-            "std_acc":        round(r["std_acc"],  6),
-        })
-
-    summary_df = pd.DataFrame(rows)
-    summary_dir = f"results/time_agnostic_with_filtering/{label_tag}"
-    os.makedirs(summary_dir, exist_ok=True)
-    summary_path = os.path.join(summary_dir, "cv_aucroc_summary_RF.csv")
-    summary_df.to_csv(summary_path, index=False)
-    print(f"Summary table saved to {summary_path}")
-
-    print("\n" + summary_df.to_string(index=False))
-    print("=== All done ===")
+    configure_logging(args.log_path)
+    run_time_agnostic(args.model, args.tissue, args.feature_mode, args.n_splits)
+    logger.info("Done.")
 
 
 if __name__ == "__main__":

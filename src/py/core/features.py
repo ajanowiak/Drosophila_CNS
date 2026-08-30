@@ -1,5 +1,20 @@
 # core/features.py
 
+"""
+Builds time-agnostic feature matrices by stacking per-window motif
+enrichment scores.
+
+Pipeline context: shared across stages that need a time-agnostic dataset
+(train_full_models, shap_importance) -- lives in core/ specifically so it's
+importable from any stage directory via PYTHONPATH=src/py.
+
+Inputs:
+  - <training_dir>/hrs<window>/motif_enrichment_hrs<window>.csv
+  - <training_dir>/hrs<window>/y_<tissue>.csv
+
+Outputs: none (returns X, y, composite in memory; callers persist results).
+"""
+
 import logging
 import os
 
@@ -71,10 +86,7 @@ def stack_windows(
         n_dropped = int(nan_mask.sum())
         keep = shared[~nan_mask]
         if n_dropped > 0:
-            logger.info(
-                "[%s] hrs%s: dropped %d loops with NaN (%d remaining)",
-                tissue, w, n_dropped, len(keep),
-            )
+            logger.info(f"[{tissue}] hrs{w}: dropped {n_dropped} loops with NaN ({len(keep)} remaining)")
 
         y_w = y_w.loc[keep]
 
@@ -98,8 +110,8 @@ def stack_windows(
     X = X.drop(columns=["_window"])
 
     logger.info(
-        "[%s] Feature matrix (%s): %s | positives: %d / %d",
-        tissue, feature_mode.value, X.shape, int(y.sum()), len(y),
+        f"[{tissue}] Feature matrix ({feature_mode.value}): {X.shape} | "
+        f"positives: {int(y.sum())} / {len(y)}"
     )
 
     return X, y, composite
