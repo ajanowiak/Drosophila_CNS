@@ -22,6 +22,10 @@ NEURAL_LABELS = ['Brain','Neural','Ventral nerve cord',
 WINDOWS = ["06-08", "10-12", "14-16"]
 WINDOWS_PREV = ["04-06", "08-10", "12-14"]
 
+# Main window -> its immediate predecessor, derived from the two lists above
+# so they can't drift apart.
+PREV_WINDOW = dict(zip(WINDOWS, WINDOWS_PREV))
+
 TISSUES = ["Neuroblasts", "Neurons", "Glia"]
 
 # Short code -> classifier class, display name, and default hyperparameters.
@@ -59,3 +63,9 @@ class FilteringMode(Enum):
     UNFILTERED = "unfiltered"
     NEURAL_LABELS = "neural_labels"
     REFINED_ANNOTATIONS = "refined_annotations"
+
+
+class FeatureMode(Enum):
+    CURRENT = "curr"
+    PREVIOUS = "prev"
+    EXPANDED = "expanded"
