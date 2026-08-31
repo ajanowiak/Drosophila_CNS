@@ -63,3 +63,8 @@ epv_values:
   - 15
   - 20
   - 25
+
+logit:
+  p_value_threshold: 0.05
+  top_n_coeffs: 20
+  volcano_effect_threshold: 0.5
