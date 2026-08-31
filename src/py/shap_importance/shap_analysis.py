@@ -1,173 +1,90 @@
 # shap_analysis.py
 
-import shap
+"""
+Computes SHAP importance for a trained time-agnostic classifier and saves a
+beeswarm plot plus a per-motif importance table.
 
-import os
+Pipeline context: Snakemake fans out over model and tissue. Reads the
+all-data time-agnostic model trained by train_full_models (curr feature
+mode) and rebuilds the same stacked dataset it was trained on, via
+core.features.stack_windows. The saved SHAP table feeds the feature preselection for future models.
+
+Inputs:
+  - results/models/time_agnostic/<model>/curr/<model>_<tissue>_curr.pkl
+  - results/training_data/unfiltered/hrs<window>/motif_enrichment_hrs<window>.csv
+  - results/training_data/unfiltered/hrs<window>/y_<tissue>.csv
+  - data/motif_names.tsv (motif ID -> name annotations)
+
+Outputs:
+  - results/figures/shap/<model>/<tissue>_beeswarm_<model>.pdf
+  - results/shap/<model>/<tissue>_shap_table_<model>.csv
+"""
+
 import argparse
-import pickle
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
+import logging
+from pathlib import Path
 
-from utils import make_names_dict, compose_windows
+from core.constants import MODELS, FeatureMode
+from core.features import stack_windows
+from core.log import configure_logging
+from core.motif_labels import load_motif_annotations, motif_display_labels
+from shap_importance.explain import compute_shap_values, summarize_shap_values
+from shap_importance.io import load_model, save_shap_table
+from shap_importance.plotting import plot_beeswarm
 
-#### FIXME: (somehow) Add logger
+logger = logging.getLogger(__name__)
 
 
-def shap_analysis_with_beeswarm(
-    classifier_path: str,
-    tissue: str,
-    motif_annotations_path: str = None,
-    motif_annotations_sep: str = None,
-    windows: list[str] = ["06-08", "10-12", "14-16"],
-    top_n_motifs: int = 20,
-    random_state:int = 0
-):
-    """
-    Perform SHAP-based interpretability analysis for a pretrained
-    time-agnostic chromatin loop classifier.
+def run_shap_analysis(
+    model: str, tissue: str, motif_annotations_path: str, motif_annotations_sep: str
+) -> None:
+    """Compute and save SHAP importance for one (model, tissue)."""
+    full = MODELS[model]["full"]
 
-    This function:
-    1. Loads a pretrained classifier from disk (.pkl)
-    2. Reconstructs the time-agnostic dataset for a given tissue
-    3. Computes SHAP values using an explainer appropriate to the model class
-    4. Produces and saves a SHAP beeswarm plot
-    5. Constructs and saves a dataframe containing SHAP statistics for ALL motifs:
-       - mean SHAP value
-       - absolute mean SHAP value
-       - standard deviation of SHAP values
+    logger.info(f"SHAP analysis: {full} | {tissue}")
 
-    Args:
-        classifier_path (str): Path to a trained time-agnostic classifier (.pkl file)
+    classifier_path = f"results/models/time_agnostic/{model}/curr/{model}_{tissue}_curr.pkl"
+    classifier = load_model(classifier_path)
 
-        tissue (str): Tissue name (must match label file naming convention)
+    X, _, _ = stack_windows(tissue, feature_mode=FeatureMode.CURRENT)
 
-        motif_annotations_path (str) (Optional): path of the csv file with motif annotations
+    id_to_name = load_motif_annotations(motif_annotations_path, motif_annotations_sep)
+    feature_names = motif_display_labels(X.columns, id_to_name)
+    n_unmatched = sum(1 for name, motif_id in zip(feature_names, X.columns) if name == motif_id)
+    if n_unmatched > 0:
+        logger.info(f"{n_unmatched} motif columns had no matching annotation")
 
-        motif_annotations_sep (str) (Optional): the separator in said annotations file
+    shap_values = compute_shap_values(classifier, model, X)
 
-        windows (list[str]): Time windows used to construct the time-agnostic dataset
-
-        top_n_motifs (int): Number of motifs to show in the bar plot
-
-        random_state (int): Random seed for reproducibility
-
-    Returns:    
-        shap_df (pandas.DataFrame): DataFrame with SHAP statistics for all motifs
-    """
-
-    # Load model
-    with open(classifier_path, "rb") as f:
-        model = pickle.load(f)
-
-    # Create name variables for plot titles/labels and file names
-    #### FIXME: (somehow) Load this from config instead!!!!
-    model_names = make_names_dict()
-    model_key = type(model).__name__
-    model_name = model_names[model_key]['full']
-    model_short = model_names[model_key]['short']
-
-    #### FIXME: Load the composed .csv into a dataframe instead  
-    # Load data
-    X, y, composite = compose_windows(tissue, windows)
-
-    ### TUTAJ ROBIĘ X_shap ze zmienioną kolumną !!!
-    if motif_annotations_path:
-        annot = pd.read_csv(motif_annotations_path, sep=motif_annotations_sep)
-
-        num_mismatches = len(X.columns) - (X.columns == annot["id"]).sum()
-        assert num_mismatches == 0, f"Invalid annotations! There are {num_mismatches} mismatches in motif codes!"
-        
-        new_columns = annot["name"].astype(str) + "  -  (" + annot["id"].astype(str) + ")"
-        motif_names = annot["name"]
-        motif_ids = annot["id"]
-        X.columns = new_columns
-
-    X_shap = X#[:15]    #SMALLER SAMPLE FOR QUICK TESTING
-
-    def predict_proba_pos(model, X):
-        """Return P(y=1) only."""
-        return model.predict_proba(X)[:, 1]
-        
-    if model_key in ["RandomForestClassifier", "XGBClassifier"]:
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_shap)
-
-        # Normalize TreeExplainer output
-        if isinstance(shap_values, list):
-            shap_values = shap_values[1]
-        elif shap_values.ndim == 3:
-            shap_values = shap_values[:, :, 1]
-
-    else:
-        # Explain only P(y=1)!
-        explainer = shap.KernelExplainer(
-            lambda X: predict_proba_pos(model, X),
-            X_shap
-        )
-        shap_values = explainer.shap_values(X_shap)
-
-    # Beeswarm plot
-    plt.figure(figsize=(8, 8))
-    shap.summary_plot(shap_values, X_shap, show=False)
-
-    plt.title(f"{model_name} beeswarm SHAP feature importance plot for tissue {tissue}")
-    
-    plt.tight_layout()
-
-    # SAVE THE PLOT
-    figures_path = f"results/figures/shap/{model_short}"
-    os.makedirs(figures_path, exist_ok=True)
-    beeswarm_path = os.path.join(
-        figures_path, f"{tissue}_beeswarm_{model_short}.pdf"
+    beeswarm_path = f"results/figures/shap/{model}/{tissue}_beeswarm_{model}.pdf"
+    plot_beeswarm(
+        shap_values, X, feature_names,
+        title=f"{full} beeswarm SHAP feature importance plot for tissue {tissue}",
+        out_path=beeswarm_path,
     )
-    plt.savefig(beeswarm_path, dpi=300, format="pdf")
+    logger.info(f"Beeswarm plot saved to {beeswarm_path}")
 
-    # Aggregate statistics, create and save DataFrame
-    mean_vals = shap_values.mean(axis=0)
-    std_vals = shap_values.std(axis=0)
-    abs_mean_vals = np.abs(mean_vals)
-    mean_abs_vals = np.abs(shap_values).mean(axis=0)
+    shap_df = summarize_shap_values(shap_values, X, id_to_name)
+    table_path = f"results/shap/{model}/{tissue}_shap_table_{model}.csv"
+    save_shap_table(shap_df, table_path)
+    logger.info(f"SHAP table saved to {table_path}")
 
-    shap_df = pd.DataFrame({
-        "motif_id": motif_ids,
-        "motif_name": motif_names,
-        "mean_importance": mean_vals,
-        "abs_mean_importance": abs_mean_vals,
-        "mean_abs_importance": mean_abs_vals,
-        "std_importance": std_vals
-    }).sort_values("abs_mean_importance", ascending=False)
 
-    # SAVE THE RESULTS DATAFRAME
-    data_path = f"results/shap/{model_short}"
-    os.makedirs(data_path, exist_ok=True)
-    df_path = os.path.join(
-        data_path, f"{tissue}_shap_table_{model_short}.csv"
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="SHAP importance analysis for a trained time-agnostic classifier"
     )
-    shap_df.to_csv(df_path, index=False)
-    
-    return shap_df
+    parser.add_argument("--model", required=True, choices=list(MODELS.keys()))
+    parser.add_argument("--tissue", required=True, help="Tissue name, e.g. Glia")
+    parser.add_argument("--motif_annotations_path", default="data/motif_names.tsv")
+    parser.add_argument("--motif_annotations_sep", default="\t")
+    parser.add_argument("--log_path", type=Path, required=True)
+    args = parser.parse_args()
 
-def main():
+    configure_logging(args.log_path)
+    run_shap_analysis(args.model, args.tissue, args.motif_annotations_path, args.motif_annotations_sep)
+    logger.info("Done.")
 
-    #### FIXME: MOVE TO CONFIG!!!
-    
-    tissues = ["Neuroblasts", "Neurons", "Glia"]
-    # models = ['RF', 'XGB', 'LR', 'SVM'] 
-    models = ['RF', 'XGB'] 
-    annot_path = "data/motif_names.tsv"
-
-    #### FIXME: MOVE LOOP TO SNAKEMAKE!!!
-    for m in models:
-        for t in tissues: 
-            print(f"SHAP analysis for model {m} for tissue {t}...")
-            _ = shap_analysis_with_beeswarm(
-                classifier_path=f"results/models/time_agnostic/all_data/{m}_{t}.pkl",
-                tissue=t,
-                top_n_motifs=25,
-                motif_annotations_path = annot_path,
-                motif_annotations_sep = "\t"    
-            )
 
 if __name__ == "__main__":
     main()
