@@ -72,19 +72,19 @@ SKLEARN_CLASS_TO_SHORT = {v["class"].__name__: k for k, v in MODELS.items()}
 # using different values before this refactor -- preserved as-is rather
 # than reconciled, since reconciling would change trained-model results.
 TIME_SPECIFIC_MODEL_PARAMS = {
-    "RF": dict(n_estimators=500, random_state=0, n_jobs=-1),
-    "SVM": dict(probability=True),
-    "LR": dict(max_iter=1000),
-    "XGB": dict(n_estimators=500, n_jobs=-1),
+    "RF": dict(n_estimators=500, random_state=0, n_jobs=12),
+    "SVM": dict(probability=True, random_state=0, n_jobs=12),
+    "LR": dict(max_iter=1000, random_state=0, n_jobs=12),
+    "XGB": dict(n_estimators=500, random_state=0, n_jobs=12),
 }
 
 # hyperparameters as used by train_time_agnostic_expanded.py (now covers
 # curr / prev / expanded feature modes).
 TIME_AGNOSTIC_MODEL_PARAMS = {
-    "RF": dict(n_estimators=500, random_state=0, n_jobs=4),
-    "SVM": dict(probability=True, random_state=0),
-    "LR": dict(max_iter=1000, random_state=0, n_jobs=4),
-    "XGB": dict(n_estimators=500, random_state=0, n_jobs=4),
+    "RF": dict(n_estimators=500, random_state=0, n_jobs=12),
+    "SVM": dict(probability=True, random_state=0, n_jobs=12),
+    "LR": dict(max_iter=1000, random_state=0, n_jobs=12),
+    "XGB": dict(n_estimators=500, random_state=0, n_jobs=12),
 }
 
 # Enums
@@ -98,3 +98,8 @@ class FeatureMode(Enum):
     CURRENT = "curr"
     PREVIOUS = "prev"
     EXPANDED = "expanded"
+
+
+class FeatureSelectionMode(Enum):
+    EPV = "epv"
+    BINSEARCH = "binsearch"

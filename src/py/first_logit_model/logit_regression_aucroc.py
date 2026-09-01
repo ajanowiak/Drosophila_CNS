@@ -1,21 +1,24 @@
 # logit_regression_aucroc.py
 
 """
-Cross-validates the first logit model across multiple EPV values, to help
-choose an EPV for one tissue.
+Cross-validates the first logit model's already-chosen feature set(s), to
+help evaluate a tissue's feature selection.
 
-Pipeline context: compares the same shap_model's downsampled features at
-several EPV budgets, reusing regression_coefs.py's own output to also
-report how many of those features turned out significant after the
-Benjamini-Hochberg correction. Looping over epv values here is intentional:
-comparing EPV choices for one tissue is this script's whole purpose,
-unlike looping over tissues or models, which Snakemake fans out over.
+Pipeline context: reads the feature set straight from regression_coefs.py's
+saved summary instead of recomputing it -- so this never repeats an
+expensive binary search, and can never disagree with what regression_coefs.py
+actually fit. In epv mode, this sweeps multiple epv values for one tissue
+(comparing epv choices is this script's purpose there, unlike looping over
+tissues or models, which Snakemake fans out over) and produces a
+multi-row comparison table. In binsearch mode there is no free parameter to
+sweep -- exactly one feature set exists per tissue -- so it evaluates that
+one set and produces a single-row table in the same schema.
 
 Inputs:
-  - results/shap/<shap_model>/<tissue>_shap_table_<shap_model>.csv
+  - results/regression_coefs/<shap_model>/<selection_tag>/<tissue>_summary.csv
+    (one per epv value in epv mode, or the single binsearch one)
   - results/training_data/unfiltered/hrs<window>/motif_enrichment_hrs<window>.csv
   - results/training_data/unfiltered/hrs<window>/y_<tissue>.csv
-  - results/regression_coefs/<shap_model>/epv_<epv>/<tissue>_summary.csv (per epv)
 
 Outputs:
   - results/logit_regression_cv_aucroc/<shap_model>/<tissue>_logit_cv_results.csv
@@ -29,33 +32,37 @@ from pathlib import Path
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
 
-from core.constants import MODELS, FeatureMode
+from core.constants import MODELS, FeatureMode, FeatureSelectionMode
 from core.features import stack_windows
 from core.log import configure_logging
 from core.logit_analysis import logit_cross_validate
-from first_logit_model.features import num_features_from_epv, downsample_features_shap
+from first_logit_model.features import feature_selection_tag
+from first_logit_model.io import extract_used_features
 
 logger = logging.getLogger(__name__)
 
 
-def train_logit_cv(tissue: str, shap_model: str, epv: int, n_splits: int, p_value_threshold: float) -> dict:
+def evaluate_selection(
+    tissue: str, shap_model: str, selection_tag: str, n_splits: int, p_value_threshold: float
+) -> dict:
     """
-    Cross-validate the first logit model for one (tissue, shap_model, epv).
+    Cross-validate regression_coefs.py's already-chosen feature set for one
+    (tissue, shap_model, selection_tag).
 
     Returns a dict with the CV AUC and the BH-significant feature count
     from regression_coefs.py's own full-data fit for the same combination.
     """
-    num_features = num_features_from_epv(tissue, epv)
-    logger.info(f"[{tissue}] shap_model={shap_model}, EPV={epv}, num_features={num_features}")
+    features = extract_used_features(tissue, shap_model, selection_tag)
+    num_features = len(features)
+    logger.info(f"[{tissue}] shap_model={shap_model}, selection={selection_tag}, num_features={num_features}")
 
-    downsampled_features = downsample_features_shap(tissue, shap_model, num_features)
     X, y, composite = stack_windows(tissue, feature_mode=FeatureMode.CURRENT)
-    X = X[downsampled_features]
+    X = X[features]
 
     splitter = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
     mean_auc, std_auc = logit_cross_validate(X, y, splitter, stratify_target=composite)
 
-    summary_path = f"results/regression_coefs/{shap_model}/epv_{epv}/{tissue}_summary.csv"
+    summary_path = f"results/regression_coefs/{shap_model}/{selection_tag}/{tissue}_summary.csv"
     regression_summary = pd.read_csv(summary_path)
 
     num_significant_bh = (regression_summary["p_adjusted_bh"] < p_value_threshold).sum()
@@ -67,7 +74,7 @@ def train_logit_cv(tissue: str, shap_model: str, epv: int, n_splits: int, p_valu
 
     return {
         "tissue": tissue,
-        "epv": epv,
+        "selection": selection_tag,
         "num_features": num_features,
         "num_features_significant_bh": num_significant_bh,
         "mean_auc": mean_auc,
@@ -77,26 +84,43 @@ def train_logit_cv(tissue: str, shap_model: str, epv: int, n_splits: int, p_valu
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Cross-validate the first logit model across EPV values for one tissue"
+        description="Cross-validate the first logit model's chosen feature set(s) for one tissue"
     )
     parser.add_argument("--tissue", required=True, help="Tissue name, e.g. Glia")
     parser.add_argument("--shap_model", required=True, choices=list(MODELS.keys()))
-    parser.add_argument("--epv_values", type=int, nargs="+", required=True)
+    parser.add_argument(
+        "--feature_selection_mode",
+        type=FeatureSelectionMode,
+        choices=list(FeatureSelectionMode),
+        required=True,
+    )
+    parser.add_argument(
+        "--epv_values", type=int, nargs="+", default=None,
+        help="Required when --feature_selection_mode is epv; ignored otherwise",
+    )
     parser.add_argument("--n_splits", type=int, required=True)
     parser.add_argument("--p_value_threshold", type=float, required=True)
     parser.add_argument("--log_path", type=Path, required=True)
     args = parser.parse_args()
 
+    if args.feature_selection_mode == FeatureSelectionMode.EPV and not args.epv_values:
+        parser.error("--epv_values is required when --feature_selection_mode is epv")
+
     configure_logging(args.log_path)
 
+    if args.feature_selection_mode == FeatureSelectionMode.EPV:
+        selection_tags = [feature_selection_tag(FeatureSelectionMode.EPV, epv) for epv in args.epv_values]
+    else:
+        selection_tags = [feature_selection_tag(FeatureSelectionMode.BINSEARCH, None)]
+
     all_results = []
-    for epv in args.epv_values:
+    for selection_tag in selection_tags:
         try:
             all_results.append(
-                train_logit_cv(args.tissue, args.shap_model, epv, args.n_splits, args.p_value_threshold)
+                evaluate_selection(args.tissue, args.shap_model, selection_tag, args.n_splits, args.p_value_threshold)
             )
         except Exception as e:
-            logger.info(f"[{args.tissue}] EPV={epv} FAILED: {e}")
+            logger.info(f"[{args.tissue}] {selection_tag} FAILED: {e}")
             continue
 
     if not all_results:
@@ -107,7 +131,7 @@ def main() -> None:
     results_df["mean_auc"] = results_df["mean_auc"].round(6)
     results_df["std_auc"] = results_df["std_auc"].round(6)
     results_df = results_df.sort_values("mean_auc", ascending=False)
-    results_df = results_df[["epv", "num_features", "num_features_significant_bh", "mean_auc", "std_auc"]]
+    results_df = results_df[["selection", "num_features", "num_features_significant_bh", "mean_auc", "std_auc"]]
 
     output_dir = f"results/logit_regression_cv_aucroc/{args.shap_model}"
     os.makedirs(output_dir, exist_ok=True)

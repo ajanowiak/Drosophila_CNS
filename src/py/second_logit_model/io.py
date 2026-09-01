@@ -5,7 +5,7 @@ I/O helpers for logit_regression_significant_features.py: extracting the
 significant feature list from regression_coefs.py's output, and saving
 this stage's own summary and CV-result tables.
 
-Inputs: results/regression_coefs/<shap_model>/epv_<epv>/<tissue>_summary.csv
+Inputs: results/regression_coefs/<shap_model>/<selection_tag>/<tissue>_summary.csv
 Outputs: none (returns the significant feature list; save_* persist results).
 """
 
@@ -14,12 +14,14 @@ import os
 import pandas as pd
 
 
-def extract_significant_features(tissue: str, shap_model: str, epv: int, p_value_threshold: float) -> pd.Series:
+def extract_significant_features(
+    tissue: str, shap_model: str, selection_tag: str, p_value_threshold: float
+) -> pd.Series:
     """
     Extract motif IDs with BH-adjusted p-value < p_value_threshold from
-    regression_coefs.py's output for the same (tissue, shap_model, epv).
+    regression_coefs.py's output for the same (tissue, shap_model, selection_tag).
     """
-    summary_path = f"results/regression_coefs/{shap_model}/epv_{epv}/{tissue}_summary.csv"
+    summary_path = f"results/regression_coefs/{shap_model}/{selection_tag}/{tissue}_summary.csv"
 
     if not os.path.exists(summary_path):
         raise FileNotFoundError(f"Summary file not found: {summary_path}")

@@ -1,8 +1,8 @@
 # logit_analysis.py
 
 """
-Shared statsmodels Logit fitting and cross-validation for the logit-model
-stages (first_logit_model, second_logit_model).
+Shared statsmodels Logit fitting, cross-validation, and feature-count search
+for the logit-model stages (first_logit_model, second_logit_model).
 
 Pipeline context: both stages fit a statsmodels Logit on a downsampled
 feature set and estimate CV AUC the same way; this module implements that
@@ -19,6 +19,7 @@ import pandas as pd
 import statsmodels.api as sm
 from sklearn.metrics import roc_curve, auc
 from statsmodels.stats.multitest import multipletests
+from statsmodels.tools.sm_exceptions import PerfectSeparationError
 
 
 def fit_logit_summary(X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
@@ -49,6 +50,29 @@ def fit_logit_summary(X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
     summary_df = pd.concat([summary_df, ci], axis=1)
 
     return summary_df.sort_values("coef", key=abs, ascending=False)
+
+
+def find_max_features_binary_search(X_ranked: pd.DataFrame, y: pd.Series) -> int:
+    """
+    Binary search the largest prefix of X_ranked's columns that fits a
+    statsmodels Logit without a singular-matrix / perfect-separation error.
+
+    X_ranked's columns must already be sorted by descending importance --
+    this searches prefixes, not arbitrary subsets. Assumes monotonicity:
+    if N features fit, every N' < N also fits.
+    """
+    lo, hi, best = 1, X_ranked.shape[1], 1
+
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        try:
+            sm.Logit(y, sm.add_constant(X_ranked.iloc[:, :mid])).fit(disp=False)
+        except (np.linalg.LinAlgError, PerfectSeparationError):
+            hi = mid - 1
+            continue
+        best, lo = mid, mid + 1
+
+    return best
 
 
 def logit_cross_validate(X: pd.DataFrame, y: pd.Series, splitter, stratify_target) -> tuple[float, float]:
