@@ -5,7 +5,7 @@ Builds time-agnostic feature matrices by stacking per-window motif
 enrichment scores.
 
 Pipeline context: shared across stages that need a time-agnostic dataset
-(train_full_models, shap_importance) -- lives in core/ specifically so it's
+(train_full_models, shap_importance) - lives in core/ specifically so it's
 importable from any stage directory via PYTHONPATH=src/py.
 
 Inputs:
@@ -43,12 +43,12 @@ def stack_windows(
 
     Only prev columns are suffixed (_prev), to disambiguate them from curr
     columns when both are concatenated (EXPANDED). Curr columns always keep
-    raw motif-ID column names, in every mode -- callers that join column
+    raw motif-ID column names, in every mode - callers that join column
     names against the motif annotation table (e.g. shap_analysis.py) only
     ever see raw IDs for curr features.
 
     Returns:
-        X (pd.DataFrame), y (pd.Series), composite (np.ndarray) -- composite
+        X (pd.DataFrame), y (pd.Series), composite (np.ndarray) - composite
         encodes (window_index, label) pairs for StratifiedKFold, so folds
         stay balanced across both developmental window and class.
     """
@@ -79,7 +79,10 @@ def stack_windows(
         for src in sources.values():
             shared = shared.intersection(src.index)
 
-        nan_mask = pd.Series(False, index=shared)
+        # some loop/tissue/window combinations have no presence annotation
+        # (NaN in y_w itself), not just in the enrichment sources - both
+        # have to be dropped, or a NaN label reaches classifier.fit() later.
+        nan_mask = y_w.loc[shared].isna()
         for src in sources.values():
             nan_mask |= src.loc[shared].isna().any(axis=1)
 

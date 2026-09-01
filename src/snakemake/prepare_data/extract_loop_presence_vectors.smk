@@ -1,6 +1,6 @@
 # Extracts the binary loop-presence vector (ML training target) for one
 # tissue and time window. Unlike compute_motif_enrichment, this does not
-# depend on filtering mode computationally -- filtering mode only selects
+# depend on filtering mode computationally - filtering mode only selects
 # which per-window output directory the vector is written to, so the same
 # vector ends up duplicated across the unfiltered/neural_labels/
 # refined_annotations directories, next to the corresponding enrichment
@@ -16,11 +16,11 @@ rule extract_loop_presence_vectors:
         "logs/extract_loop_presence_vectors/{filtering_mode}_hrs{window}_{tissue}.log"
 
     conda:
-        "../../env/motif_enrichment.yaml"
+        "../../../env/prepare_data.yaml"
 
     shell:
         """
-        PYTHONPATH=src/py python src/py/prapare_data/extract_loop_presence_vectors.py \
+        PYTHONPATH=src/py python src/py/prepare_data/extract_loop_presence_vectors.py \
             --window {wildcards.window} \
             --tissue {wildcards.tissue} \
             --filtering_mode {wildcards.filtering_mode} \

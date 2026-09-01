@@ -8,7 +8,7 @@ and second_logit_model (logit_regression_significant_features.py), which
 both plot the output of core.logit_analysis.fit_logit_summary().
 
 Inputs: none (operates on an in-memory summary DataFrame).
-Outputs: writes the figure to output_path.
+Outputs: writes the figure to each path in out_paths.
 """
 
 import os
@@ -17,7 +17,24 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_coeffs(summary_df, title: str, output_path: str, top_n: int) -> None:
+def plot_failed_placeholder(message: str, out_paths: list[str]) -> None:
+    """
+    Save a placeholder figure carrying a short failure message, in place of
+    a coefficient/volcano plot that couldn't be produced (e.g. the Logit fit
+    itself raised a singular-matrix error). Keeps the file present so a
+    failed fit is still an inspectable artifact rather than a missing file.
+    """
+    plt.figure(figsize=(8, 6))
+    plt.axis("off")
+    plt.text(0.5, 0.5, message, ha="center", va="center", wrap=True)
+
+    for out_path in out_paths:
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        plt.savefig(out_path, dpi=300)
+    plt.close()
+
+
+def plot_coeffs(summary_df, title: str, out_paths: list[str], top_n: int) -> None:
     """Plot logistic regression coefficients with 95% confidence intervals."""
     df_plot = summary_df.head(top_n).iloc[::-1]
 
@@ -37,12 +54,13 @@ def plot_coeffs(summary_df, title: str, output_path: str, top_n: int) -> None:
     plt.title(title)
     plt.tight_layout()
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    plt.savefig(output_path, dpi=300, format="pdf")
+    for out_path in out_paths:
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        plt.savefig(out_path, dpi=300)
     plt.close()
 
 
-def plot_volcano(summary_df, title: str, output_path: str, p_thresh: float, effect_thresh: float) -> None:
+def plot_volcano(summary_df, title: str, out_paths: list[str], p_thresh: float, effect_thresh: float) -> None:
     """Create a volcano plot of logistic regression coefficients."""
     df = summary_df.copy()
     p_column_name = "p_adjusted_bh"
@@ -78,6 +96,7 @@ def plot_volcano(summary_df, title: str, output_path: str, p_thresh: float, effe
     plt.legend()
     plt.tight_layout()
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    plt.savefig(output_path, dpi=300, format="pdf")
+    for out_path in out_paths:
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        plt.savefig(out_path, dpi=300)
     plt.close()

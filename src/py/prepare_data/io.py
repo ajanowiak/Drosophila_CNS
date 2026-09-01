@@ -58,7 +58,7 @@ def load_window(
     def load_df(path: Path, label: str = 'loops') -> pd.DataFrame:
 
         logger.info(f"Loading {label} data for window {window}")
-        df = pd.read_csv(loops_path, sep="\t", index_col=0)
+        df = pd.read_csv(path, sep="\t", index_col=0)
 
         logger.info(f"Converting the {label} matrix to numeric values and removing invalid cells")
         df = df.apply(pd.to_numeric, errors="coerce").dropna(axis=1)
@@ -147,6 +147,7 @@ def save_enrichment_matrix(
     group: str,
     window: str,
     output_dir: Path,
+    filtering_mode: FilteringMode,
 ) -> None:
     """
     Save a motif enrichment matrix for a single group.
@@ -156,6 +157,11 @@ def save_enrichment_matrix(
         group: Group name (tissue name, "all", etc.).
         window: Time window (e.g. "06-08").
         output_dir: Directory where enrichment matrices should be written.
+        filtering_mode: Grouping strategy that produced this matrix. Only
+            REFINED_ANNOTATIONS can produce more than one group per window,
+            so only it needs the group name in the file name to avoid
+            collisions -- every downstream reader expects the unprefixed
+            name for UNFILTERED/NEURAL_LABELS.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -164,7 +170,10 @@ def save_enrichment_matrix(
         key=lambda idx: idx.astype(str).str.extract(r"(\d+)").astype(int)[0]
     )
 
-    output_path = output_dir / f"{group}_motif_enrichment_hrs{window}.csv"
+    if filtering_mode == FilteringMode.REFINED_ANNOTATIONS:
+        output_path = output_dir / f"{group}_motif_enrichment_hrs{window}.csv"
+    else:
+        output_path = output_dir / f"motif_enrichment_hrs{window}.csv"
     enrichment_df.to_csv(output_path)
 
 

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from cv import CVResult
+from train_full_models.cv import CVResult
 
 
 def plot_roc(

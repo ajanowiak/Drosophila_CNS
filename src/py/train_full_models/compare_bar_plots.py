@@ -14,9 +14,9 @@ Inputs:
 
 Outputs:
   - results/figures/expanded_bar_plots/<model>/time_specific_vs_agnostic_<model>.{png,pdf}
-    (--comparison time_specific_vs_agnostic)
+    (-comparison time_specific_vs_agnostic)
   - results/figures/expanded_bar_plots/<model>/curr_prev_expanded_<model>.{png,pdf}
-    (--comparison curr_prev_expanded)
+    (-comparison curr_prev_expanded)
 """
 
 import argparse

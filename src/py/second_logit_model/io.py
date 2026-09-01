@@ -29,7 +29,12 @@ def extract_significant_features(
     summary_df = pd.read_csv(summary_path, index_col=0)
     significant_df = summary_df[summary_df["p_adjusted_bh"] < p_value_threshold]
 
-    return pd.Series(significant_df.index.tolist())
+    # "const" is the fitted intercept, not a real motif column in X - drop
+    # it even when it's itself BH-significant (see first_logit_model/io.py's
+    # extract_used_features, which excludes it the same way).
+    motif_ids = [motif_id for motif_id in significant_df.index if motif_id != "const"]
+
+    return pd.Series(motif_ids)
 
 
 def save_summary_table(df: pd.DataFrame, path: str) -> None:

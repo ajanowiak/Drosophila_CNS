@@ -5,7 +5,7 @@ Loads motif ID -> name annotations and builds display labels for plots.
 
 Pipeline context: shared across every stage that attaches a human-readable
 motif name to a motif ID column (shap_importance, first_logit_model,
-second_logit_model) -- lives in core/ specifically so it's importable from
+second_logit_model) - lives in core/ specifically so it's importable from
 any stage directory via PYTHONPATH=src/py.
 
 Inputs: a motif annotation TSV with "id" and "name" columns.

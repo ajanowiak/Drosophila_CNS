@@ -5,13 +5,13 @@ Cross-validates the first logit model's already-chosen feature set(s), to
 help evaluate a tissue's feature selection.
 
 Pipeline context: reads the feature set straight from regression_coefs.py's
-saved summary instead of recomputing it -- so this never repeats an
+saved summary instead of recomputing it - so this never repeats an
 expensive binary search, and can never disagree with what regression_coefs.py
 actually fit. In epv mode, this sweeps multiple epv values for one tissue
 (comparing epv choices is this script's purpose there, unlike looping over
 tissues or models, which Snakemake fans out over) and produces a
 multi-row comparison table. In binsearch mode there is no free parameter to
-sweep -- exactly one feature set exists per tissue -- so it evaluates that
+sweep - exactly one feature set exists per tissue - so it evaluates that
 one set and produces a single-row table in the same schema.
 
 Inputs:
@@ -21,7 +21,8 @@ Inputs:
   - results/training_data/unfiltered/hrs<window>/y_<tissue>.csv
 
 Outputs:
-  - results/logit_regression_cv_aucroc/<shap_model>/<tissue>_logit_cv_results.csv
+  - results/logit_regression_cv_aucroc/<shap_model>/<tissue>_logit_cv_results_epv_sweep.csv (epv mode)
+  - results/logit_regression_cv_aucroc/<shap_model>/<tissue>_logit_cv_results_binsearch.csv (binsearch mode)
 """
 
 import argparse
@@ -43,11 +44,16 @@ logger = logging.getLogger(__name__)
 
 
 def evaluate_selection(
-    tissue: str, shap_model: str, selection_tag: str, n_splits: int, p_value_threshold: float
+    tissue: str, shap_model: str, selection_tag: str, selection_value, n_splits: int, p_value_threshold: float
 ) -> dict:
     """
     Cross-validate regression_coefs.py's already-chosen feature set for one
     (tissue, shap_model, selection_tag).
+
+    selection_tag drives the summary-file lookup (e.g. "epv_10"); selection_value
+    is what's reported in the output table's "selection" column -- the plain
+    epv number in epv mode, so the column stays numeric, or "binsearch" in
+    binsearch mode (no numeric equivalent there).
 
     Returns a dict with the CV AUC and the BH-significant feature count
     from regression_coefs.py's own full-data fit for the same combination.
@@ -74,7 +80,7 @@ def evaluate_selection(
 
     return {
         "tissue": tissue,
-        "selection": selection_tag,
+        "selection": selection_value,
         "num_features": num_features,
         "num_features_significant_bh": num_significant_bh,
         "mean_auc": mean_auc,
@@ -109,33 +115,44 @@ def main() -> None:
     configure_logging(args.log_path)
 
     if args.feature_selection_mode == FeatureSelectionMode.EPV:
-        selection_tags = [feature_selection_tag(FeatureSelectionMode.EPV, epv) for epv in args.epv_values]
+        selections = [(feature_selection_tag(FeatureSelectionMode.EPV, epv), epv) for epv in args.epv_values]
     else:
-        selection_tags = [feature_selection_tag(FeatureSelectionMode.BINSEARCH, None)]
+        selections = [(feature_selection_tag(FeatureSelectionMode.BINSEARCH, None), "binsearch")]
 
     all_results = []
-    for selection_tag in selection_tags:
+    for selection_tag, selection_value in selections:
         try:
             all_results.append(
-                evaluate_selection(args.tissue, args.shap_model, selection_tag, args.n_splits, args.p_value_threshold)
+                evaluate_selection(
+                    args.tissue, args.shap_model, selection_tag, selection_value,
+                    args.n_splits, args.p_value_threshold,
+                )
             )
         except Exception as e:
             logger.info(f"[{args.tissue}] {selection_tag} FAILED: {e}")
             continue
 
+    mode_tag = "epv_sweep" if args.feature_selection_mode == FeatureSelectionMode.EPV else "binsearch"
+
+    output_dir = f"results/logit_regression_cv_aucroc/{args.shap_model}"
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = f"{output_dir}/{args.tissue}_logit_cv_results_{mode_tag}.csv"
+    columns = ["selection", "num_features", "num_features_significant_bh", "mean_auc", "std_auc"]
+
     if not all_results:
+        # every selection_tag's CV failed (e.g. a singular matrix in some
+        # fold) - still write the declared output (empty but headed) so a
+        # legitimate "nothing evaluated cleanly" result is distinguishable
+        # from the file simply never having been produced.
         logger.info(f"No successful models for tissue: {args.tissue}")
+        pd.DataFrame(columns=columns).to_csv(output_path, index=False)
         return
 
     results_df = pd.DataFrame(all_results)
     results_df["mean_auc"] = results_df["mean_auc"].round(6)
     results_df["std_auc"] = results_df["std_auc"].round(6)
     results_df = results_df.sort_values("mean_auc", ascending=False)
-    results_df = results_df[["selection", "num_features", "num_features_significant_bh", "mean_auc", "std_auc"]]
-
-    output_dir = f"results/logit_regression_cv_aucroc/{args.shap_model}"
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = f"{output_dir}/{args.tissue}_logit_cv_results.csv"
+    results_df = results_df[columns]
     results_df.to_csv(output_path, index=False)
     logger.info(f"Table for tissue {args.tissue} saved at {output_path}")
 

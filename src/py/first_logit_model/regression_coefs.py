@@ -28,19 +28,23 @@ Inputs:
 
 Outputs:
   - results/regression_coefs/<shap_model>/<selection_tag>/<tissue>_summary.csv
-  - results/figures/regression_coefs/<shap_model>/<selection_tag>/<tissue>_coefficients.pdf
-  - results/figures/regression_coefs/<shap_model>/<selection_tag>/<tissue>_volcano.pdf
+  - results/figures/regression_coefs/<shap_model>/<selection_tag>/<tissue>_coefficients.{pdf,png}
+  - results/figures/regression_coefs/<shap_model>/<selection_tag>/<tissue>_volcano.{pdf,png}
 """
 
 import argparse
 import logging
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+from statsmodels.tools.sm_exceptions import PerfectSeparationError
+
 from core.constants import MODELS, FeatureMode, FeatureSelectionMode
 from core.features import stack_windows
 from core.log import configure_logging
 from core.logit_analysis import fit_logit_summary, find_max_features_binary_search
-from core.logit_plots import plot_coeffs, plot_volcano
+from core.logit_plots import plot_coeffs, plot_volcano, plot_failed_placeholder
 from core.motif_labels import load_motif_annotations, motif_display_labels
 from first_logit_model.features import (
     num_features_from_epv,
@@ -81,15 +85,33 @@ def run_regression_coefs(
     downsampled_features = ranked_features[:num_features]
     X = X[downsampled_features]
 
-    summary_df = fit_logit_summary(X, y)
+    data_dir = f"results/regression_coefs/{shap_model}/{selection_tag}"
+    fig_dir = f"results/figures/regression_coefs/{shap_model}/{selection_tag}"
+    summary_path = f"{data_dir}/{tissue}_summary.csv"
+    coef_plot_paths = [f"{fig_dir}/{tissue}_coefficients.pdf", f"{fig_dir}/{tissue}_coefficients.png"]
+    volcano_plot_paths = [f"{fig_dir}/{tissue}_volcano.pdf", f"{fig_dir}/{tissue}_volcano.png"]
+
+    # some epv budgets pick a feature count the full-data fit can't actually
+    # support (no feasibility check the way binary search's own search loop
+    # has) - expected to happen for some (tissue, epv) combinations, so log
+    # and move on rather than crashing the whole run.
+    try:
+        summary_df = fit_logit_summary(X, y)
+    except (np.linalg.LinAlgError, PerfectSeparationError) as e:
+        logger.info(f"[{tissue}] shap_model={shap_model} selection={selection_tag} FIT FAILED: {e}")
+        empty_columns = [
+            "coef", "std_err", "z", "p_unadjusted", "p_adjusted_bh",
+            "p_adjusted_tsbh", "ci_lower", "ci_upper", "motif_name",
+        ]
+        save_summary_table(pd.DataFrame(columns=empty_columns), summary_path)
+        message = f"Fit failed for {tissue} ({num_features} features, {selection_tag}):\n{e}"
+        plot_failed_placeholder(message, coef_plot_paths)
+        plot_failed_placeholder(message, volcano_plot_paths)
+        return
 
     id_to_name = load_motif_annotations(motif_annotations_path, motif_annotations_sep)
     summary_df["motif_name"] = [id_to_name.get(motif_id, motif_id) for motif_id in summary_df.index]
 
-    data_dir = f"results/regression_coefs/{shap_model}/{selection_tag}"
-    fig_dir = f"results/figures/regression_coefs/{shap_model}/{selection_tag}"
-
-    summary_path = f"{data_dir}/{tissue}_summary.csv"
     save_summary_table(summary_df, summary_path)
     logger.info(f"Summary table saved to {summary_path}")
 
@@ -97,24 +119,22 @@ def run_regression_coefs(
     plot_df = summary_df.copy()
     plot_df.index = motif_display_labels(summary_df.index, id_to_name)
 
-    coef_plot_path = f"{fig_dir}/{tissue}_coefficients.pdf"
     plot_coeffs(
         plot_df,
         title=f"Top {top_n_coeffs} Features with 95% CI - {tissue}",
-        output_path=coef_plot_path,
+        out_paths=coef_plot_paths,
         top_n=top_n_coeffs,
     )
-    logger.info(f"Coefficient plot saved to {coef_plot_path}")
+    logger.info(f"Coefficient plot saved to {coef_plot_paths}")
 
-    volcano_plot_path = f"{fig_dir}/{tissue}_volcano.pdf"
     plot_volcano(
         plot_df,
         title=f"Volcano Plot - {tissue} ({num_features} features)\nP-value threshold: {p_value_threshold}",
-        output_path=volcano_plot_path,
+        out_paths=volcano_plot_paths,
         p_thresh=p_value_threshold,
         effect_thresh=volcano_effect_threshold,
     )
-    logger.info(f"Volcano plot saved to {volcano_plot_path}")
+    logger.info(f"Volcano plot saved to {volcano_plot_paths}")
 
 
 def main() -> None:

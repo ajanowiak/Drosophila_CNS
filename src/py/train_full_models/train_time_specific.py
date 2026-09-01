@@ -1,7 +1,7 @@
 # train_time_specific.py
 
 """
-Trains one binary classifier for a single (model, tissue, window) -- the
+Trains one binary classifier for a single (model, tissue, window) - the
 time-specific training mode.
 
 Inputs:
@@ -25,9 +25,9 @@ from sklearn.model_selection import KFold
 
 from core.constants import MODELS, TIME_SPECIFIC_MODEL_PARAMS, WINDOWS
 from core.log import configure_logging
-from cv import cross_validate, fit_full_data_model
+from train_full_models.cv import cross_validate, fit_full_data_model
 from train_full_models.io import load_time_specific_features, save_model, save_cv_result, save_summary_row
-from plotting import plot_roc
+from train_full_models.plotting import plot_roc
 
 logger = logging.getLogger(__name__)
 

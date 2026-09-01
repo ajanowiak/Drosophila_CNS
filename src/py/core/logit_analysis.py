@@ -33,8 +33,18 @@ def fit_logit_summary(X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
     res = sm.Logit(y, sm.add_constant(X)).fit(disp=False)
 
     p_unadjusted = res.pvalues
-    _, p_bh, _, _ = multipletests(p_unadjusted, method="fdr_bh")
-    _, p_tsbh, _, _ = multipletests(p_unadjusted, method="fdr_tsbh")
+
+    # a handful of coefficients routinely come out with a NaN Wald p-value
+    # (near-singular variance estimate from collinear motif features) -
+    # multipletests() propagates a single NaN to its *entire* output array,
+    # so it has to run on the finite subset only. NaN stays NaN (correctly
+    # non-significant) for those features.
+    finite = p_unadjusted.notna()
+    p_bh = pd.Series(np.nan, index=p_unadjusted.index)
+    p_tsbh = pd.Series(np.nan, index=p_unadjusted.index)
+    if finite.any():
+        _, p_bh[finite], _, _ = multipletests(p_unadjusted[finite], method="fdr_bh")
+        _, p_tsbh[finite], _, _ = multipletests(p_unadjusted[finite], method="fdr_tsbh")
 
     summary_df = pd.DataFrame({
         "coef": res.params,
@@ -57,7 +67,7 @@ def find_max_features_binary_search(X_ranked: pd.DataFrame, y: pd.Series) -> int
     Binary search the largest prefix of X_ranked's columns that fits a
     statsmodels Logit without a singular-matrix / perfect-separation error.
 
-    X_ranked's columns must already be sorted by descending importance --
+    X_ranked's columns must already be sorted by descending importance -
     this searches prefixes, not arbitrary subsets. Assumes monotonicity:
     if N features fit, every N' < N also fits.
     """
@@ -82,7 +92,7 @@ def logit_cross_validate(X: pd.DataFrame, y: pd.Series, splitter, stratify_targe
     Args:
         X, y: feature matrix and binary target.
         splitter: an already-configured StratifiedKFold instance.
-        stratify_target: passed to splitter.split(X, stratify_target) --
+        stratify_target: passed to splitter.split(X, stratify_target) -
             the composite stratification array.
     """
     roc_aucs = []

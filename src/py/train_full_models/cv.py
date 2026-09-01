@@ -47,7 +47,7 @@ def cross_validate(classifier, X, y, splitter, stratify_target) -> CVResult:
         classifier: unfitted sklearn-style estimator, cloned per fold.
         X, y: feature matrix and binary target.
         splitter: an already-configured KFold or StratifiedKFold instance.
-        stratify_target: passed to splitter.split(X, stratify_target) --
+        stratify_target: passed to splitter.split(X, stratify_target) -
             the composite stratification array for StratifiedKFold, or None
             for plain KFold (which ignores it).
 

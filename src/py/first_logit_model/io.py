@@ -24,7 +24,7 @@ def extract_used_features(tissue: str, shap_model: str, selection_tag: str) -> p
     """
     Return every motif ID regression_coefs.py actually fit for one
     (tissue, shap_model, selection_tag), read back from its saved summary
-    table rather than recomputed -- so this can never disagree with what
+    table rather than recomputed - so this can never disagree with what
     was actually fit, and never repeats an expensive binary search.
     """
     summary_path = f"results/regression_coefs/{shap_model}/{selection_tag}/{tissue}_summary.csv"

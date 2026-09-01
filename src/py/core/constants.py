@@ -69,11 +69,11 @@ SKLEARN_CLASS_TO_SHORT = {v["class"].__name__: k for k, v in MODELS.items()}
 
 # hyperparameters as used by train_time_specific.py. Kept separate from
 # TIME_AGNOSTIC_MODEL_PARAMS below because the two scripts were already
-# using different values before this refactor -- preserved as-is rather
+# using different values before this refactor - preserved as-is rather
 # than reconciled, since reconciling would change trained-model results.
 TIME_SPECIFIC_MODEL_PARAMS = {
     "RF": dict(n_estimators=500, random_state=0, n_jobs=12),
-    "SVM": dict(probability=True, random_state=0, n_jobs=12),
+    "SVM": dict(probability=True, random_state=0),
     "LR": dict(max_iter=1000, random_state=0, n_jobs=12),
     "XGB": dict(n_estimators=500, random_state=0, n_jobs=12),
 }
@@ -82,7 +82,7 @@ TIME_SPECIFIC_MODEL_PARAMS = {
 # curr / prev / expanded feature modes).
 TIME_AGNOSTIC_MODEL_PARAMS = {
     "RF": dict(n_estimators=500, random_state=0, n_jobs=12),
-    "SVM": dict(probability=True, random_state=0, n_jobs=12),
+    "SVM": dict(probability=True, random_state=0),
     "LR": dict(max_iter=1000, random_state=0, n_jobs=12),
     "XGB": dict(n_estimators=500, random_state=0, n_jobs=12),
 }

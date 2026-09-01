@@ -16,11 +16,11 @@ rule compute_motif_enrichment:
         "logs/compute_motif_enrichment/{filtering_mode}_hrs{window}.log"
 
     conda:
-        "../../env/motif_enrichment.yaml"
+        "../../../env/prepare_data.yaml"
 
     shell:
         """
-        PYTHONPATH=src/py python src/py/prapare_data/compute_motif_enrichment.py \
+        PYTHONPATH=src/py python src/py/prepare_data/compute_motif_enrichment.py \
             --window {wildcards.window} \
             --filtering_mode {wildcards.filtering_mode} \
             --metadata_path {input.metadata} \

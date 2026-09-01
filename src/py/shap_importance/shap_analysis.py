@@ -17,6 +17,7 @@ Inputs:
 
 Outputs:
   - results/figures/shap/<model>/<tissue>_beeswarm_<model>.pdf
+  - results/figures/shap/<model>/<tissue>_beeswarm_<model>.png
   - results/shap/<model>/<tissue>_shap_table_<model>.csv
 """
 
@@ -56,13 +57,16 @@ def run_shap_analysis(
 
     shap_values = compute_shap_values(classifier, model, X)
 
-    beeswarm_path = f"results/figures/shap/{model}/{tissue}_beeswarm_{model}.pdf"
+    beeswarm_paths = [
+        f"results/figures/shap/{model}/{tissue}_beeswarm_{model}.pdf",
+        f"results/figures/shap/{model}/{tissue}_beeswarm_{model}.png",
+    ]
     plot_beeswarm(
         shap_values, X, feature_names,
         title=f"{full} beeswarm SHAP feature importance plot for tissue {tissue}",
-        out_path=beeswarm_path,
+        out_paths=beeswarm_paths,
     )
-    logger.info(f"Beeswarm plot saved to {beeswarm_path}")
+    logger.info(f"Beeswarm plot saved to {beeswarm_paths}")
 
     shap_df = summarize_shap_values(shap_values, X, id_to_name)
     table_path = f"results/shap/{model}/{tissue}_shap_table_{model}.csv"

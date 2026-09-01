@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from core.log import configure_logging
-from core.constants import WINDOWS, FilteringMode
+from core.constants import WINDOWS, WINDOWS_PREV, FilteringMode
 from prepare_data.io import load_window, load_metadata, save_enrichment_matrix, save_global_count_table
 
 logger = logging.getLogger(__name__)
@@ -129,6 +129,7 @@ def compute_enrichment_for_window(
             group=group,
             window=window,
             output_dir=output_dir,
+            filtering_mode=filtering_mode,
         )
 
         if global_count_11 is None:
@@ -158,7 +159,10 @@ def main() -> None:
     parser.add_argument(
         "--window",
         required=True,
-        choices=WINDOWS,
+        # includes the preceding windows too (WINDOWS_PREV): stack_windows()'s
+        # PREVIOUS/EXPANDED feature modes need enrichment matrices for those
+        # as well as the three main windows.
+        choices=WINDOWS + WINDOWS_PREV,
         help="Time window to process.",
     )
 

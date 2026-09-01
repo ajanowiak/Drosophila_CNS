@@ -5,7 +5,7 @@ Overlays the three tissues' ROC curves from train_time_specific.py into one
 combined figure, for a single (model, window).
 
 Pipeline context: reads the CVResult pickled by train_time_specific.py for
-each tissue and re-plots them together -- it does not re-run CV. Looping
+each tissue and re-plots them together - it does not re-run CV. Looping
 over tissues here is intentional: a single overlay figure needs all three
 tissues in the same process, the same exception already made for
 compare_bar_plots.py.

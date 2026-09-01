@@ -2,7 +2,7 @@
 
 """
 Trains one binary classifier for a single (model, tissue, feature_mode) on a
-dataset stacked across all three developmental windows -- covers both the
+dataset stacked across all three developmental windows - covers both the
 time-agnostic and expanded time-agnostic training modes.
 
 feature_mode selects which window's enrichment scores feed each classifier:
@@ -28,9 +28,9 @@ from core.config import load_config
 from core.constants import MODELS, TIME_AGNOSTIC_MODEL_PARAMS, FeatureMode
 from core.features import stack_windows
 from core.log import configure_logging
-from cv import cross_validate, fit_full_data_model
+from train_full_models.cv import cross_validate, fit_full_data_model
 from train_full_models.io import save_model, save_summary_row
-from plotting import plot_roc
+from train_full_models.plotting import plot_roc
 
 logger = logging.getLogger(__name__)
 
