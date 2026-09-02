@@ -127,7 +127,6 @@ def compute_enrichment_for_window(
         save_enrichment_matrix(
             enrichment_df=enrichment_df,
             group=group,
-            window=window,
             output_dir=output_dir,
             filtering_mode=filtering_mode,
         )
@@ -144,7 +143,6 @@ def compute_enrichment_for_window(
     assert global_count_11 is not None
     save_global_count_table(
         global_count_df=global_count_11,
-        window=window,
         output_dir=output_dir,
     )
 

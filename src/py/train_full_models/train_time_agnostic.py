@@ -9,13 +9,13 @@ feature_mode selects which window's enrichment scores feed each classifier:
 curr (time-agnostic), prev, or expanded (curr and prev concatenated).
 
 Inputs:
-  - results/training_data/unfiltered/hrs<window>/motif_enrichment_hrs<window>.csv
-  - results/training_data/unfiltered/hrs<window>/y_<tissue>.csv
+  - results/prepare_data/unfiltered/hrs<window>/motif_enrichment.csv
+  - results/prepare_data/unfiltered/hrs<window>/y_<tissue>.csv
 
 Outputs:
-  - results/models/time_agnostic/<model>/<feature_mode>/<model>_<tissue>_<feature_mode>.pkl
-  - results/figures/time_agnostic/<model>_<feature_mode>/roc_<model>_<feature_mode>_<tissue>.{pdf,png}
-  - results/time_agnostic/<model>/<feature_mode>/cv_aucroc_summary_<model>_<feature_mode>_<tissue>.csv
+  - results/train_full_models/train_time_agnostic/models/<model>/<feature_mode>/<tissue>.pkl
+  - results/train_full_models/train_time_agnostic/figures/<model>/<feature_mode>/<tissue>.{pdf,png}
+  - results/train_full_models/train_time_agnostic/cv_aucroc_summary/<model>/<feature_mode>/<tissue>.csv
 """
 
 import argparse
@@ -28,6 +28,11 @@ from core.config import load_config
 from core.constants import MODELS, TIME_AGNOSTIC_MODEL_PARAMS, FeatureMode
 from core.features import stack_windows
 from core.log import configure_logging
+from core.paths import (
+    train_time_agnostic_figure_dir,
+    train_time_agnostic_model_path,
+    train_time_agnostic_summary_path,
+)
 from train_full_models.cv import cross_validate, fit_full_data_model
 from train_full_models.io import save_model, save_summary_row
 from train_full_models.plotting import plot_roc
@@ -54,7 +59,7 @@ def run_time_agnostic(model: str, tissue: str, feature_mode: FeatureMode, n_spli
     splitter = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
     result = cross_validate(classifier, X, y, splitter, stratify_target=composite)
 
-    fig_dir = f"results/figures/time_agnostic/{model}_{mode_tag}"
+    fig_dir = train_time_agnostic_figure_dir(model, mode_tag)
     plot_roc(
         result,
         title=(
@@ -63,7 +68,7 @@ def run_time_agnostic(model: str, tissue: str, feature_mode: FeatureMode, n_spli
             f"Acc = {result.mean_acc:.3f} ± {result.std_acc:.3f}"
         ),
         out_paths=[
-            Path(fig_dir) / f"roc_{model}_{mode_tag}_{tissue}.{fmt}"
+            Path(fig_dir) / f"{tissue}.{fmt}"
             for fmt in ("pdf", "png")
         ],
         color=color,
@@ -74,9 +79,9 @@ def run_time_agnostic(model: str, tissue: str, feature_mode: FeatureMode, n_spli
     logger.info(f"[{tissue}] ROC figure saved to {fig_dir}")
 
     all_clf = fit_full_data_model(classifier, X, y)
-    model_dir = f"results/models/time_agnostic/{model}/{mode_tag}"
-    save_model(all_clf, f"{model_dir}/{model}_{tissue}_{mode_tag}.pkl")
-    logger.info(f"[{tissue}] Full-data model saved to {model_dir}")
+    model_path = train_time_agnostic_model_path(model, mode_tag, tissue)
+    save_model(all_clf, model_path)
+    logger.info(f"[{tissue}] Full-data model saved to {model_path}")
 
     summary_row = {
         "tissue": tissue,
@@ -88,7 +93,7 @@ def run_time_agnostic(model: str, tissue: str, feature_mode: FeatureMode, n_spli
         "std_acc": round(result.std_acc, 6),
     }
 
-    summary_path = f"results/time_agnostic/{model}/{mode_tag}/cv_aucroc_summary_{model}_{mode_tag}_{tissue}.csv"
+    summary_path = train_time_agnostic_summary_path(model, mode_tag, tissue)
     save_summary_row(summary_row, summary_path)
     logger.info(f"Saved summary: {summary_path}")
 

@@ -15,20 +15,20 @@ rule all_shap_importance:
 
 rule shap_analysis:
     input:
-        model="results/models/time_agnostic/{model}/curr/{model}_{tissue}_curr.pkl",
+        model="results/train_full_models/train_time_agnostic/models/{model}/curr/{tissue}.pkl",
         enrichment=expand(
-            "results/training_data/unfiltered/hrs{window}/motif_enrichment_hrs{window}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/motif_enrichment.csv",
             window=config["windows"],
         ),
         y=expand(
-            "results/training_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
             window=config["windows"],
         ),
         motif_names="data/motif_names.tsv",
     output:
-        beeswarm_pdf="results/figures/shap/{model}/{tissue}_beeswarm_{model}.pdf",
-        beeswarm_png="results/figures/shap/{model}/{tissue}_beeswarm_{model}.png",
-        table="results/shap/{model}/{tissue}_shap_table_{model}.csv",
+        beeswarm_pdf="results/shap_importance/shap_analysis/figures/{model}/{tissue}.pdf",
+        beeswarm_png="results/shap_importance/shap_analysis/figures/{model}/{tissue}.png",
+        table="results/shap_importance/shap_analysis/tables/{model}/{tissue}.csv",
     log:
         "logs/shap_analysis/{model}_{tissue}.log"
     conda:

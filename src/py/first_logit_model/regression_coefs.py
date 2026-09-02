@@ -21,15 +21,15 @@ feature_selection_mode picks how many motifs to preselect:
                 computed dynamically with num_features_from_epv)
 
 Inputs:
-  - results/shap/<shap_model>/<tissue>_shap_table_<shap_model>.csv
-  - results/training_data/unfiltered/hrs<window>/motif_enrichment_hrs<window>.csv
-  - results/training_data/unfiltered/hrs<window>/y_<tissue>.csv
+  - results/shap_importance/shap_analysis/tables/<shap_model>/<tissue>.csv
+  - results/prepare_data/unfiltered/hrs<window>/motif_enrichment.csv
+  - results/prepare_data/unfiltered/hrs<window>/y_<tissue>.csv
   - data/motif_names.tsv (motif ID -> name annotations)
 
 Outputs:
-  - results/regression_coefs/<shap_model>/<selection_tag>/<tissue>_summary.csv
-  - results/figures/regression_coefs/<shap_model>/<selection_tag>/<tissue>_coefficients.{pdf,png}
-  - results/figures/regression_coefs/<shap_model>/<selection_tag>/<tissue>_volcano.{pdf,png}
+  - results/first_logit_model/regression_coefs/tables/<shap_model>/<selection_tag>/<tissue>.csv
+  - results/first_logit_model/regression_coefs/figures/<shap_model>/<selection_tag>/<tissue>_coefficients.{pdf,png}
+  - results/first_logit_model/regression_coefs/figures/<shap_model>/<selection_tag>/<tissue>_volcano.{pdf,png}
 """
 
 import argparse
@@ -46,6 +46,7 @@ from core.log import configure_logging
 from core.logit_analysis import fit_logit_summary, find_max_features_binary_search
 from core.logit_plots import plot_coeffs, plot_volcano, plot_failed_placeholder
 from core.motif_labels import load_motif_annotations, motif_display_labels
+from core.paths import regression_coefs_figure_dir, regression_coefs_table_path
 from first_logit_model.features import (
     num_features_from_epv,
     downsample_features_shap,
@@ -85,9 +86,8 @@ def run_regression_coefs(
     downsampled_features = ranked_features[:num_features]
     X = X[downsampled_features]
 
-    data_dir = f"results/regression_coefs/{shap_model}/{selection_tag}"
-    fig_dir = f"results/figures/regression_coefs/{shap_model}/{selection_tag}"
-    summary_path = f"{data_dir}/{tissue}_summary.csv"
+    fig_dir = regression_coefs_figure_dir(shap_model, selection_tag)
+    summary_path = regression_coefs_table_path(shap_model, selection_tag, tissue)
     coef_plot_paths = [f"{fig_dir}/{tissue}_coefficients.pdf", f"{fig_dir}/{tissue}_coefficients.png"]
     volcano_plot_paths = [f"{fig_dir}/{tissue}_volcano.pdf", f"{fig_dir}/{tissue}_volcano.png"]
 

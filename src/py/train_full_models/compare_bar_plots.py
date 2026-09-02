@@ -9,13 +9,13 @@ Pipeline context: reads the per-tissue CV summary CSVs written by
 train_time_specific.py and train_time_agnostic.py.
 
 Inputs:
-  - results/time_specific/<model>/hrs<window>/cv_aucroc_summary_<model>_hrs<window>_<tissue>.csv
-  - results/time_agnostic/<model>/<feature_mode>/cv_aucroc_summary_<model>_<feature_mode>_<tissue>.csv
+  - results/train_full_models/train_time_specific/cv_aucroc_summary/<model>/hrs<window>/<tissue>.csv
+  - results/train_full_models/train_time_agnostic/cv_aucroc_summary/<model>/<feature_mode>/<tissue>.csv
 
 Outputs:
-  - results/figures/expanded_bar_plots/<model>/time_specific_vs_agnostic_<model>.{png,pdf}
+  - results/train_full_models/compare_bar_plots/figures/<model>/time_specific_vs_agnostic.{png,pdf}
     (-comparison time_specific_vs_agnostic)
-  - results/figures/expanded_bar_plots/<model>/curr_prev_expanded_<model>.{png,pdf}
+  - results/train_full_models/compare_bar_plots/figures/<model>/curr_prev_expanded.{png,pdf}
     (-comparison curr_prev_expanded)
 """
 
@@ -30,6 +30,7 @@ import matplotlib.pyplot as plt
 from core.config import load_config
 from core.constants import MODELS, TISSUES, WINDOWS
 from core.log import configure_logging
+from core.paths import compare_bar_plots_figure_dir
 from train_full_models.io import load_time_specific, load_time_agnostic
 
 logger = logging.getLogger(__name__)
@@ -96,15 +97,15 @@ def plot_time_specific_vs_agnostic(short, full):
     ax.legend(frameon=False)
     ax.spines[['top', 'right']].set_visible(False)
 
-    out_dir = f"results/figures/expanded_bar_plots/{short}"
+    out_dir = compare_bar_plots_figure_dir(short)
     os.makedirs(out_dir, exist_ok=True)
 
     for fmt in ["png", "pdf"]:
-        plt.savefig(f"{out_dir}/time_specific_vs_agnostic_{short}.{fmt}",
+        plt.savefig(f"{out_dir}/time_specific_vs_agnostic.{fmt}",
                     dpi=300, bbox_inches="tight")
 
     plt.close(fig)
-    logger.info(f"Saved {out_dir}/time_specific_vs_agnostic_{short}.{{png,pdf}}")
+    logger.info(f"Saved {out_dir}/time_specific_vs_agnostic.{{png,pdf}}")
 
 
 def plot_time_agnostic_comparison(short, full):
@@ -167,15 +168,15 @@ def plot_time_agnostic_comparison(short, full):
     ax.legend(frameon=False)
     ax.spines[['top', 'right']].set_visible(False)
 
-    out_dir = f"results/figures/expanded_bar_plots/{short}"
+    out_dir = compare_bar_plots_figure_dir(short)
     os.makedirs(out_dir, exist_ok=True)
 
     for fmt in ["png", "pdf"]:
-        plt.savefig(f"{out_dir}/curr_prev_expanded_{short}.{fmt}",
+        plt.savefig(f"{out_dir}/curr_prev_expanded.{fmt}",
                     dpi=300, bbox_inches="tight")
 
     plt.close(fig)
-    logger.info(f"Saved {out_dir}/curr_prev_expanded_{short}.{{png,pdf}}")
+    logger.info(f"Saved {out_dir}/curr_prev_expanded.{{png,pdf}}")
 
 
 def main() -> None:

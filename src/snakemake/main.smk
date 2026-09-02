@@ -20,11 +20,11 @@ SHAP_MODELS = ["RF", "XGB"]
 
 def prepare_data_targets():
     return expand(
-        "results/training_data/{filtering_mode}/hrs{window}/.done",
+        "results/prepare_data/{filtering_mode}/hrs{window}/.done",
         filtering_mode=FILTERING_MODES,
         window=config["windows"],
     ) + expand(
-        "results/training_data/{filtering_mode}/hrs{window}/y_{tissue}.csv",
+        "results/prepare_data/{filtering_mode}/hrs{window}/y_{tissue}.csv",
         filtering_mode=FILTERING_MODES,
         window=config["windows"],
         tissue=config["tissues"],
@@ -34,24 +34,24 @@ def prepare_data_targets():
 def train_full_models_targets():
     return (
         expand(
-            "results/models/time_agnostic/{model}/{feature_mode}/{model}_{tissue}_{feature_mode}.pkl",
+            "results/train_full_models/train_time_agnostic/models/{model}/{feature_mode}/{tissue}.pkl",
             model=config["models"],
             feature_mode=config["feature_modes"],
             tissue=config["tissues"],
         )
         + expand(
-            "results/models/time_specific/all_data/{model}/hrs{window}/{model}_{tissue}_hrs{window}.pkl",
+            "results/train_full_models/train_time_specific/models/all_data/{model}/hrs{window}/{tissue}.pkl",
             model=config["models"],
             window=config["windows"],
             tissue=config["tissues"],
         )
         + expand(
-            "results/figures/time_specific/{model}/hrs{window}/roc_{model}_combined_hrs{window}.png",
+            "results/train_full_models/combined_roc_plot/figures/{model}/hrs{window}/combined.png",
             model=config["models"],
             window=config["windows"],
         )
         + expand(
-            "results/figures/expanded_bar_plots/{model}/{comparison}_{model}.png",
+            "results/train_full_models/compare_bar_plots/figures/{model}/{comparison}.png",
             model=config["models"],
             comparison=config["comparisons"],
         )
@@ -60,7 +60,7 @@ def train_full_models_targets():
 
 def shap_importance_targets():
     return expand(
-        "results/shap/{model}/{tissue}_shap_table_{model}.csv",
+        "results/shap_importance/shap_analysis/tables/{model}/{tissue}.csv",
         model=SHAP_MODELS,
         tissue=config["tissues"],
     )
@@ -69,23 +69,23 @@ def shap_importance_targets():
 def first_logit_model_targets():
     return (
         expand(
-            "results/regression_coefs/{shap_model}/binsearch/{tissue}_summary.csv",
+            "results/first_logit_model/regression_coefs/tables/{shap_model}/binsearch/{tissue}.csv",
             shap_model=SHAP_MODELS,
             tissue=config["tissues"],
         )
         + expand(
-            "results/regression_coefs/{shap_model}/epv_{epv}/{tissue}_summary.csv",
+            "results/first_logit_model/regression_coefs/tables/{shap_model}/epv_{epv}/{tissue}.csv",
             shap_model=SHAP_MODELS,
             tissue=config["tissues"],
             epv=config["epv_values"],
         )
         + expand(
-            "results/logit_regression_cv_aucroc/{shap_model}/{tissue}_logit_cv_results_binsearch.csv",
+            "results/first_logit_model/logit_regression_aucroc/tables/{shap_model}/binsearch/{tissue}.csv",
             shap_model=SHAP_MODELS,
             tissue=config["tissues"],
         )
         + expand(
-            "results/logit_regression_cv_aucroc/{shap_model}/{tissue}_logit_cv_results_epv_sweep.csv",
+            "results/first_logit_model/logit_regression_aucroc/tables/{shap_model}/epv_sweep/{tissue}.csv",
             shap_model=SHAP_MODELS,
             tissue=config["tissues"],
         )
@@ -94,11 +94,11 @@ def first_logit_model_targets():
 
 def second_logit_model_targets():
     return expand(
-        "results/second_logit_model/{shap_model}/binsearch/{tissue}_summary.csv",
+        "results/second_logit_model/logit_regression_significant_features/tables/{shap_model}/binsearch/{tissue}_summary.csv",
         shap_model=SHAP_MODELS,
         tissue=config["tissues"],
     ) + expand(
-        "results/second_logit_model/{shap_model}/epv_{epv}/{tissue}_summary.csv",
+        "results/second_logit_model/logit_regression_significant_features/tables/{shap_model}/epv_{epv}/{tissue}_summary.csv",
         shap_model=SHAP_MODELS,
         tissue=config["tissues"],
         epv=config["epv_values"],

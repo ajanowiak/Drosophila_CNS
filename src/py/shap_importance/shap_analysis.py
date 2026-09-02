@@ -10,15 +10,15 @@ mode) and rebuilds the same stacked dataset it was trained on, via
 core.features.stack_windows. The saved SHAP table feeds the feature preselection for future models.
 
 Inputs:
-  - results/models/time_agnostic/<model>/curr/<model>_<tissue>_curr.pkl
-  - results/training_data/unfiltered/hrs<window>/motif_enrichment_hrs<window>.csv
-  - results/training_data/unfiltered/hrs<window>/y_<tissue>.csv
+  - results/train_full_models/train_time_agnostic/models/<model>/curr/<tissue>.pkl
+  - results/prepare_data/unfiltered/hrs<window>/motif_enrichment.csv
+  - results/prepare_data/unfiltered/hrs<window>/y_<tissue>.csv
   - data/motif_names.tsv (motif ID -> name annotations)
 
 Outputs:
-  - results/figures/shap/<model>/<tissue>_beeswarm_<model>.pdf
-  - results/figures/shap/<model>/<tissue>_beeswarm_<model>.png
-  - results/shap/<model>/<tissue>_shap_table_<model>.csv
+  - results/shap_importance/shap_analysis/figures/<model>/<tissue>.pdf
+  - results/shap_importance/shap_analysis/figures/<model>/<tissue>.png
+  - results/shap_importance/shap_analysis/tables/<model>/<tissue>.csv
 """
 
 import argparse
@@ -29,6 +29,7 @@ from core.constants import MODELS, FeatureMode
 from core.features import stack_windows
 from core.log import configure_logging
 from core.motif_labels import load_motif_annotations, motif_display_labels
+from core.paths import shap_figure_dir, shap_table_path, train_time_agnostic_model_path
 from shap_importance.explain import compute_shap_values, summarize_shap_values
 from shap_importance.io import load_model, save_shap_table
 from shap_importance.plotting import plot_beeswarm
@@ -44,7 +45,7 @@ def run_shap_analysis(
 
     logger.info(f"SHAP analysis: {full} | {tissue}")
 
-    classifier_path = f"results/models/time_agnostic/{model}/curr/{model}_{tissue}_curr.pkl"
+    classifier_path = train_time_agnostic_model_path(model, "curr", tissue)
     classifier = load_model(classifier_path)
 
     X, _, _ = stack_windows(tissue, feature_mode=FeatureMode.CURRENT)
@@ -57,9 +58,10 @@ def run_shap_analysis(
 
     shap_values = compute_shap_values(classifier, model, X)
 
+    fig_dir = shap_figure_dir(model)
     beeswarm_paths = [
-        f"results/figures/shap/{model}/{tissue}_beeswarm_{model}.pdf",
-        f"results/figures/shap/{model}/{tissue}_beeswarm_{model}.png",
+        f"{fig_dir}/{tissue}.pdf",
+        f"{fig_dir}/{tissue}.png",
     ]
     plot_beeswarm(
         shap_values, X, feature_names,
@@ -69,7 +71,7 @@ def run_shap_analysis(
     logger.info(f"Beeswarm plot saved to {beeswarm_paths}")
 
     shap_df = summarize_shap_values(shap_values, X, id_to_name)
-    table_path = f"results/shap/{model}/{tissue}_shap_table_{model}.csv"
+    table_path = shap_table_path(model, tissue)
     save_shap_table(shap_df, table_path)
     logger.info(f"SHAP table saved to {table_path}")
 

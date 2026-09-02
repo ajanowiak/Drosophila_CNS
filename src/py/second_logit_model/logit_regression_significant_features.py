@@ -12,16 +12,16 @@ interpretable model whose predictive performance supports the biological
 relevance of the selected motifs.
 
 Inputs:
-  - results/regression_coefs/<shap_model>/<selection_tag>/<tissue>_summary.csv
-  - results/training_data/unfiltered/hrs<window>/motif_enrichment_hrs<window>.csv
-  - results/training_data/unfiltered/hrs<window>/y_<tissue>.csv
+  - results/first_logit_model/regression_coefs/tables/<shap_model>/<selection_tag>/<tissue>.csv
+  - results/prepare_data/unfiltered/hrs<window>/motif_enrichment.csv
+  - results/prepare_data/unfiltered/hrs<window>/y_<tissue>.csv
   - data/motif_names.tsv (motif ID -> name annotations)
 
 Outputs:
-  - results/second_logit_model/<shap_model>/<selection_tag>/<tissue>_summary.csv
-  - results/second_logit_model/<shap_model>/<selection_tag>/<tissue>_cv_results.csv
-  - results/figures/second_logit_model/<shap_model>/<selection_tag>/<tissue>_coefficients.{pdf,png}
-  - results/figures/second_logit_model/<shap_model>/<selection_tag>/<tissue>_volcano.{pdf,png}
+  - results/second_logit_model/logit_regression_significant_features/tables/<shap_model>/<selection_tag>/<tissue>_summary.csv
+  - results/second_logit_model/logit_regression_significant_features/tables/<shap_model>/<selection_tag>/<tissue>_cv_results.csv
+  - results/second_logit_model/logit_regression_significant_features/figures/<shap_model>/<selection_tag>/<tissue>_coefficients.{pdf,png}
+  - results/second_logit_model/logit_regression_significant_features/figures/<shap_model>/<selection_tag>/<tissue>_volcano.{pdf,png}
 """
 
 import argparse
@@ -39,6 +39,7 @@ from core.log import configure_logging
 from core.logit_analysis import fit_logit_summary, logit_cross_validate
 from core.logit_plots import plot_coeffs, plot_volcano, plot_failed_placeholder
 from core.motif_labels import load_motif_annotations, motif_display_labels
+from core.paths import second_logit_model_figure_dir, second_logit_model_table_dir
 from first_logit_model.features import feature_selection_tag
 from second_logit_model.io import extract_significant_features, save_summary_table, save_cv_result_row
 
@@ -59,8 +60,8 @@ def run_significant_features(
     """Fit and save the second logit model for one (tissue, shap_model, selection_tag)."""
     logger.info(f"Significant features: {tissue} | shap_model={shap_model} | selection={selection_tag}")
 
-    data_dir = f"results/second_logit_model/{shap_model}/{selection_tag}"
-    fig_dir = f"results/figures/second_logit_model/{shap_model}/{selection_tag}"
+    data_dir = second_logit_model_table_dir(shap_model, selection_tag)
+    fig_dir = second_logit_model_figure_dir(shap_model, selection_tag)
     cv_results_path = f"{data_dir}/{tissue}_cv_results.csv"
     summary_path = f"{data_dir}/{tissue}_summary.csv"
     coef_plot_paths = [f"{fig_dir}/{tissue}_coefficients.pdf", f"{fig_dir}/{tissue}_coefficients.png"]

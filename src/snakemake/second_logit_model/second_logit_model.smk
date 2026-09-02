@@ -10,23 +10,23 @@ rule all_second_logit_model:
 
 rule second_logit_model_binsearch:
     input:
-        summary="results/regression_coefs/{shap_model}/binsearch/{tissue}_summary.csv",
+        summary="results/first_logit_model/regression_coefs/tables/{shap_model}/binsearch/{tissue}.csv",
         enrichment=expand(
-            "results/training_data/unfiltered/hrs{window}/motif_enrichment_hrs{window}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/motif_enrichment.csv",
             window=config["windows"],
         ),
         y=expand(
-            "results/training_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
             window=config["windows"],
         ),
         motif_names="data/motif_names.tsv",
     output:
-        summary="results/second_logit_model/{shap_model}/binsearch/{tissue}_summary.csv",
-        cv_results="results/second_logit_model/{shap_model}/binsearch/{tissue}_cv_results.csv",
-        coeffs_pdf="results/figures/second_logit_model/{shap_model}/binsearch/{tissue}_coefficients.pdf",
-        coeffs_png="results/figures/second_logit_model/{shap_model}/binsearch/{tissue}_coefficients.png",
-        volcano_pdf="results/figures/second_logit_model/{shap_model}/binsearch/{tissue}_volcano.pdf",
-        volcano_png="results/figures/second_logit_model/{shap_model}/binsearch/{tissue}_volcano.png",
+        summary="results/second_logit_model/logit_regression_significant_features/tables/{shap_model}/binsearch/{tissue}_summary.csv",
+        cv_results="results/second_logit_model/logit_regression_significant_features/tables/{shap_model}/binsearch/{tissue}_cv_results.csv",
+        coeffs_pdf="results/second_logit_model/logit_regression_significant_features/figures/{shap_model}/binsearch/{tissue}_coefficients.pdf",
+        coeffs_png="results/second_logit_model/logit_regression_significant_features/figures/{shap_model}/binsearch/{tissue}_coefficients.png",
+        volcano_pdf="results/second_logit_model/logit_regression_significant_features/figures/{shap_model}/binsearch/{tissue}_volcano.pdf",
+        volcano_png="results/second_logit_model/logit_regression_significant_features/figures/{shap_model}/binsearch/{tissue}_volcano.png",
     log:
         "logs/second_logit_model/{shap_model}_binsearch_{tissue}.log"
     conda:
@@ -48,23 +48,23 @@ rule second_logit_model_binsearch:
 
 rule second_logit_model_epv:
     input:
-        summary="results/regression_coefs/{shap_model}/epv_{epv}/{tissue}_summary.csv",
+        summary="results/first_logit_model/regression_coefs/tables/{shap_model}/epv_{epv}/{tissue}.csv",
         enrichment=expand(
-            "results/training_data/unfiltered/hrs{window}/motif_enrichment_hrs{window}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/motif_enrichment.csv",
             window=config["windows"],
         ),
         y=expand(
-            "results/training_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
             window=config["windows"],
         ),
         motif_names="data/motif_names.tsv",
     output:
-        summary="results/second_logit_model/{shap_model}/epv_{epv}/{tissue}_summary.csv",
-        cv_results="results/second_logit_model/{shap_model}/epv_{epv}/{tissue}_cv_results.csv",
-        coeffs_pdf="results/figures/second_logit_model/{shap_model}/epv_{epv}/{tissue}_coefficients.pdf",
-        coeffs_png="results/figures/second_logit_model/{shap_model}/epv_{epv}/{tissue}_coefficients.png",
-        volcano_pdf="results/figures/second_logit_model/{shap_model}/epv_{epv}/{tissue}_volcano.pdf",
-        volcano_png="results/figures/second_logit_model/{shap_model}/epv_{epv}/{tissue}_volcano.png",
+        summary="results/second_logit_model/logit_regression_significant_features/tables/{shap_model}/epv_{epv}/{tissue}_summary.csv",
+        cv_results="results/second_logit_model/logit_regression_significant_features/tables/{shap_model}/epv_{epv}/{tissue}_cv_results.csv",
+        coeffs_pdf="results/second_logit_model/logit_regression_significant_features/figures/{shap_model}/epv_{epv}/{tissue}_coefficients.pdf",
+        coeffs_png="results/second_logit_model/logit_regression_significant_features/figures/{shap_model}/epv_{epv}/{tissue}_coefficients.png",
+        volcano_pdf="results/second_logit_model/logit_regression_significant_features/figures/{shap_model}/epv_{epv}/{tissue}_volcano.pdf",
+        volcano_png="results/second_logit_model/logit_regression_significant_features/figures/{shap_model}/epv_{epv}/{tissue}_volcano.png",
     log:
         "logs/second_logit_model/{shap_model}_epv_{epv}_{tissue}.log"
     conda:

@@ -5,13 +5,15 @@ I/O helpers for the first logit model stage: saving its own summary table,
 and reading back an already-fit summary to recover the exact feature set
 regression_coefs.py used (for logit_regression_aucroc.py).
 
-Inputs: results/regression_coefs/<shap_model>/<selection_tag>/<tissue>_summary.csv
+Inputs: results/first_logit_model/regression_coefs/tables/<shap_model>/<selection_tag>/<tissue>.csv
 Outputs: none (returns the feature list; save_summary_table() persists results).
 """
 
 import os
 
 import pandas as pd
+
+from core.paths import regression_coefs_table_path
 
 
 def save_summary_table(df: pd.DataFrame, path: str) -> None:
@@ -27,7 +29,7 @@ def extract_used_features(tissue: str, shap_model: str, selection_tag: str) -> p
     table rather than recomputed - so this can never disagree with what
     was actually fit, and never repeats an expensive binary search.
     """
-    summary_path = f"results/regression_coefs/{shap_model}/{selection_tag}/{tissue}_summary.csv"
+    summary_path = regression_coefs_table_path(shap_model, selection_tag, tissue)
 
     if not os.path.exists(summary_path):
         raise FileNotFoundError(f"Summary file not found: {summary_path}")

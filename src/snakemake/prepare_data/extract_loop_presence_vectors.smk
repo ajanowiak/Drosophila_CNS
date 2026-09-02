@@ -10,7 +10,7 @@ rule extract_loop_presence_vectors:
         loops="data/long_and_short_range_loops_D_mel.tsv",
 
     output:
-        "results/training_data/{filtering_mode}/hrs{window}/y_{tissue}.csv"
+        "results/prepare_data/{filtering_mode}/hrs{window}/y_{tissue}.csv"
 
     log:
         "logs/extract_loop_presence_vectors/{filtering_mode}_hrs{window}_{tissue}.log"
@@ -25,6 +25,6 @@ rule extract_loop_presence_vectors:
             --tissue {wildcards.tissue} \
             --filtering_mode {wildcards.filtering_mode} \
             --loops_path {input.loops} \
-            --output_dir results/training_data/{wildcards.filtering_mode}/hrs{wildcards.window} \
+            --output_dir results/prepare_data/{wildcards.filtering_mode}/hrs{wildcards.window} \
             --log_path {log}
         """

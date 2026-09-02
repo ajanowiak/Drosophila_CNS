@@ -11,10 +11,10 @@ tissues in the same process, the same exception already made for
 compare_bar_plots.py.
 
 Inputs:
-  - results/time_specific/<model>/hrs<window>/roc_result_<model>_hrs<window>_<tissue>.pkl
+  - results/train_full_models/train_time_specific/roc_results/<model>/hrs<window>/<tissue>.pkl
 
 Outputs:
-  - results/figures/time_specific/<model>/hrs<window>/roc_<model>_combined_hrs<window>.{png,pdf}
+  - results/train_full_models/combined_roc_plot/figures/<model>/hrs<window>/combined.{png,pdf}
 """
 
 import argparse
@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 
 from core.constants import MODELS, TISSUES, WINDOWS
 from core.log import configure_logging
+from core.paths import combined_roc_plot_figure_dir, train_time_specific_roc_result_path
 from train_full_models.io import load_cv_result
 
 logger = logging.getLogger(__name__)
@@ -37,10 +38,7 @@ def plot_combined_roc(model: str, window: str) -> None:
     fig, ax = plt.subplots(figsize=(6, 6))
 
     for tissue in TISSUES:
-        result_path = (
-            f"results/time_specific/{model}/hrs{window}/"
-            f"roc_result_{model}_hrs{window}_{tissue}.pkl"
-        )
+        result_path = train_time_specific_roc_result_path(model, window, tissue)
         result = load_cv_result(result_path)
 
         ax.plot(result.mean_fpr, result.mean_tpr, label=tissue)
@@ -50,14 +48,14 @@ def plot_combined_roc(model: str, window: str) -> None:
     ax.set(title=f"{full} ROC curves — hrs{window}")
     ax.legend()
 
-    fig_dir = Path(f"results/figures/time_specific/{model}/hrs{window}")
+    fig_dir = Path(combined_roc_plot_figure_dir(model, window))
     fig_dir.mkdir(parents=True, exist_ok=True)
 
     for fmt in ("png", "pdf"):
-        fig.savefig(fig_dir / f"roc_{model}_combined_hrs{window}.{fmt}", dpi=300, bbox_inches="tight")
+        fig.savefig(fig_dir / f"combined.{fmt}", dpi=300, bbox_inches="tight")
 
     plt.close(fig)
-    logger.info(f"Saved combined ROC plot to {fig_dir}/roc_{model}_combined_hrs{window}.{{png,pdf}}")
+    logger.info(f"Saved combined ROC plot to {fig_dir}/combined.{{png,pdf}}")
 
 
 def main() -> None:

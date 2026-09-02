@@ -9,7 +9,7 @@ Pipeline context: shared across stages that need a time-agnostic dataset
 importable from any stage directory via PYTHONPATH=src/py.
 
 Inputs:
-  - <training_dir>/hrs<window>/motif_enrichment_hrs<window>.csv
+  - <training_dir>/hrs<window>/motif_enrichment.csv
   - <training_dir>/hrs<window>/y_<tissue>.csv
 
 Outputs: none (returns X, y, composite in memory; callers persist results).
@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from core.constants import WINDOWS, PREV_WINDOW, FeatureMode
+from core.paths import prepare_data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ def stack_windows(
     tissue: str,
     feature_mode: FeatureMode = FeatureMode.CURRENT,
     windows: list[str] = WINDOWS,
-    training_dir: str = "results/training_data/unfiltered",
+    training_dir: str = prepare_data_dir("unfiltered"),
 ) -> tuple[pd.DataFrame, pd.Series, np.ndarray]:
     """
     Stack per-window motif enrichment matrices into one time-agnostic dataset.
@@ -65,13 +66,13 @@ def stack_windows(
         sources = {}
         if use_curr:
             sources["curr"] = pd.read_csv(
-                os.path.join(training_dir, f"hrs{w}/motif_enrichment_hrs{w}.csv"),
+                os.path.join(training_dir, f"hrs{w}/motif_enrichment.csv"),
                 index_col=0,
             )
         if use_prev:
             prev_w = PREV_WINDOW[w]
             sources["prev"] = pd.read_csv(
-                os.path.join(training_dir, f"hrs{prev_w}/motif_enrichment_hrs{prev_w}.csv"),
+                os.path.join(training_dir, f"hrs{prev_w}/motif_enrichment.csv"),
                 index_col=0,
             )
 

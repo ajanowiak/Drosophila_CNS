@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from core.constants import TISSUES, WINDOWS
+from core.paths import train_time_specific_summary_path, train_time_agnostic_summary_path
 
 def load_time_specific_features(tissue: str, window: str) -> tuple[pd.DataFrame, pd.Series]:
     """Load and align the motif enrichment features and labels for one (tissue, window)."""
@@ -43,7 +44,7 @@ def load_time_specific(short: str) -> dict:
 
     for w in WINDOWS:
         for t in TISSUES:
-            path = f"results/time_specific/{short}/hrs{w}/cv_aucroc_summary_{short}_hrs{w}_{t}.csv"
+            path = train_time_specific_summary_path(short, w, t)
 
             if not os.path.exists(path):
                 data[t].append((np.nan, np.nan))
@@ -60,7 +61,7 @@ def load_time_agnostic(short: str, mode_tag: str) -> dict:
     data = {}
 
     for t in TISSUES:
-        path = f"results/time_agnostic/{short}/{mode_tag}/cv_aucroc_summary_{short}_{mode_tag}_{t}.csv"
+        path = train_time_agnostic_summary_path(short, mode_tag, t)
 
         if not os.path.exists(path):
             raise FileNotFoundError(path)

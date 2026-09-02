@@ -10,7 +10,7 @@ rule compute_motif_enrichment:
         metadata="data/atac_meta.rds",
 
     output:
-        touch("results/training_data/{filtering_mode}/hrs{window}/.done")
+        touch("results/prepare_data/{filtering_mode}/hrs{window}/.done")
 
     log:
         "logs/compute_motif_enrichment/{filtering_mode}_hrs{window}.log"
@@ -24,6 +24,6 @@ rule compute_motif_enrichment:
             --window {wildcards.window} \
             --filtering_mode {wildcards.filtering_mode} \
             --metadata_path {input.metadata} \
-            --output_dir results/training_data/{wildcards.filtering_mode}/hrs{wildcards.window} \
+            --output_dir results/prepare_data/{wildcards.filtering_mode}/hrs{wildcards.window} \
             --log_path {log}
         """

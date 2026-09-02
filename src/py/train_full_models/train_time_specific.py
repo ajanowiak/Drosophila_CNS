@@ -9,11 +9,11 @@ Inputs:
   - data/training/hrs<window>/y_<tissue>.csv (binary loop-presence labels)
 
 Outputs:
-  - results/models/time_specific/cv/<model>/hrs<window>/<model>_<tissue>_hrs<window>.pkl
-  - results/models/time_specific/all_data/<model>/hrs<window>/<model>_<tissue>_hrs<window>.pkl
-  - results/figures/time_specific/<model>/hrs<window>/roc_<model>_<tissue>_hrs<window>.{png,pdf}
-  - results/time_specific/<model>/hrs<window>/roc_result_<model>_hrs<window>_<tissue>.pkl
-  - results/time_specific/<model>/hrs<window>/cv_aucroc_summary_<model>_hrs<window>_<tissue>.csv
+  - results/train_full_models/train_time_specific/models/cv/<model>/hrs<window>/<tissue>.pkl
+  - results/train_full_models/train_time_specific/models/all_data/<model>/hrs<window>/<tissue>.pkl
+  - results/train_full_models/train_time_specific/figures/<model>/hrs<window>/<tissue>.{png,pdf}
+  - results/train_full_models/train_time_specific/roc_results/<model>/hrs<window>/<tissue>.pkl
+  - results/train_full_models/train_time_specific/cv_aucroc_summary/<model>/hrs<window>/<tissue>.csv
 """
 
 import argparse
@@ -25,6 +25,12 @@ from sklearn.model_selection import KFold
 
 from core.constants import MODELS, TIME_SPECIFIC_MODEL_PARAMS, WINDOWS
 from core.log import configure_logging
+from core.paths import (
+    train_time_specific_figure_dir,
+    train_time_specific_model_path,
+    train_time_specific_roc_result_path,
+    train_time_specific_summary_path,
+)
 from train_full_models.cv import cross_validate, fit_full_data_model
 from train_full_models.io import load_time_specific_features, save_model, save_cv_result, save_summary_row
 from train_full_models.plotting import plot_roc
@@ -49,7 +55,7 @@ def run_time_specific(model: str, tissue: str, window: str, n_splits: int) -> di
     splitter = KFold(n_splits=n_splits, shuffle=True, random_state=0)
     result = cross_validate(classifier, X, y, splitter, stratify_target=None)
 
-    fig_dir = f"results/figures/time_specific/{model}/hrs{window}"
+    fig_dir = train_time_specific_figure_dir(model, window)
     plot_roc(
         result,
         title=(
@@ -58,7 +64,7 @@ def run_time_specific(model: str, tissue: str, window: str, n_splits: int) -> di
             f"Acc = {result.mean_acc:.3f} ± {result.std_acc:.3f}"
         ),
         out_paths=[
-            Path(fig_dir) / f"roc_{model}_{tissue}_hrs{window}.{fmt}"
+            Path(fig_dir) / f"{tissue}.{fmt}"
             for fmt in ("png", "pdf")
         ],
     )
@@ -67,15 +73,13 @@ def run_time_specific(model: str, tissue: str, window: str, n_splits: int) -> di
     best_fold = int(np.argmax(result.roc_aucs))
     train_idx, _ = result.fold_indices[best_fold]
     best_clf = fit_full_data_model(classifier, X.iloc[train_idx], y.iloc[train_idx])
-    save_model(best_clf, f"results/models/time_specific/cv/{model}/hrs{window}/{model}_{tissue}_hrs{window}.pkl")
+    save_model(best_clf, train_time_specific_model_path("cv", model, window, tissue))
 
     all_clf = fit_full_data_model(classifier, X, y)
-    save_model(all_clf, f"results/models/time_specific/all_data/{model}/hrs{window}/{model}_{tissue}_hrs{window}.pkl")
-
-    summary_dir = f"results/time_specific/{model}/hrs{window}"
+    save_model(all_clf, train_time_specific_model_path("all_data", model, window, tissue))
 
     # so combined_roc_plot.py can overlay this tissue's ROC curve with the other two, without re-running CV
-    save_cv_result(result, f"{summary_dir}/roc_result_{model}_hrs{window}_{tissue}.pkl")
+    save_cv_result(result, train_time_specific_roc_result_path(model, window, tissue))
 
     summary_row = {
         "tissue": tissue,
@@ -87,7 +91,7 @@ def run_time_specific(model: str, tissue: str, window: str, n_splits: int) -> di
         "std_acc": round(result.std_acc, 6),
     }
 
-    summary_path = f"{summary_dir}/cv_aucroc_summary_{model}_hrs{window}_{tissue}.csv"
+    summary_path = train_time_specific_summary_path(model, window, tissue)
     save_summary_row(summary_row, summary_path)
     logger.info(f"Saved summary: {summary_path}")
 

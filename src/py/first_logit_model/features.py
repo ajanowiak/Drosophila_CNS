@@ -11,8 +11,8 @@ feature_selection_tag() builds the <selection_tag> path segment that both
 scripts, plus second_logit_model, use to name their outputs.
 
 Inputs:
-  - results/training_data/unfiltered/hrs<window>/y_<tissue>.csv
-  - results/shap/<shap_model>/<tissue>_shap_table_<shap_model>.csv
+  - results/prepare_data/unfiltered/hrs<window>/y_<tissue>.csv
+  - results/shap_importance/shap_analysis/tables/<shap_model>/<tissue>.csv
 
 Outputs: none (returns computed values in memory).
 """
@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 
 from core.constants import WINDOWS, FeatureSelectionMode
+from core.paths import prepare_data_dir, shap_table_path
 
 
 def num_features_from_epv(tissue: str, epv: int) -> int:
@@ -32,7 +33,7 @@ def num_features_from_epv(tissue: str, epv: int) -> int:
 
     events per variable: EPV = number_of_events / number_of_features
     """
-    training_data_dir = "results/training_data/unfiltered"
+    training_data_dir = prepare_data_dir("unfiltered")
     num_events = 0
 
     for w in WINDOWS:
@@ -52,7 +53,7 @@ def downsample_features_shap(tissue: str, shap_model: str, num_features: int | N
     num_features=None, returns the full ranking (e.g. for binary search,
     which needs the whole ordering to take prefixes of).
     """
-    shap_table = pd.read_csv(f"results/shap/{shap_model}/{tissue}_shap_table_{shap_model}.csv")
+    shap_table = pd.read_csv(shap_table_path(shap_model, tissue))
     sorted_features = shap_table.sort_values("abs_mean_importance", ascending=False)["motif_id"]
     return sorted_features[:num_features] if num_features is not None else sorted_features
 

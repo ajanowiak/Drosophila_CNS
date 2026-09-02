@@ -17,22 +17,22 @@ rule all_first_logit_model:
 
 rule regression_coefs_binsearch:
     input:
-        shap_table="results/shap/{shap_model}/{tissue}_shap_table_{shap_model}.csv",
+        shap_table="results/shap_importance/shap_analysis/tables/{shap_model}/{tissue}.csv",
         enrichment=expand(
-            "results/training_data/unfiltered/hrs{window}/motif_enrichment_hrs{window}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/motif_enrichment.csv",
             window=config["windows"],
         ),
         y=expand(
-            "results/training_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
             window=config["windows"],
         ),
         motif_names="data/motif_names.tsv",
     output:
-        summary="results/regression_coefs/{shap_model}/binsearch/{tissue}_summary.csv",
-        coeffs_pdf="results/figures/regression_coefs/{shap_model}/binsearch/{tissue}_coefficients.pdf",
-        coeffs_png="results/figures/regression_coefs/{shap_model}/binsearch/{tissue}_coefficients.png",
-        volcano_pdf="results/figures/regression_coefs/{shap_model}/binsearch/{tissue}_volcano.pdf",
-        volcano_png="results/figures/regression_coefs/{shap_model}/binsearch/{tissue}_volcano.png",
+        summary="results/first_logit_model/regression_coefs/tables/{shap_model}/binsearch/{tissue}.csv",
+        coeffs_pdf="results/first_logit_model/regression_coefs/figures/{shap_model}/binsearch/{tissue}_coefficients.pdf",
+        coeffs_png="results/first_logit_model/regression_coefs/figures/{shap_model}/binsearch/{tissue}_coefficients.png",
+        volcano_pdf="results/first_logit_model/regression_coefs/figures/{shap_model}/binsearch/{tissue}_volcano.pdf",
+        volcano_png="results/first_logit_model/regression_coefs/figures/{shap_model}/binsearch/{tissue}_volcano.png",
     log:
         "logs/regression_coefs/{shap_model}_binsearch_{tissue}.log"
     conda:
@@ -53,22 +53,22 @@ rule regression_coefs_binsearch:
 
 rule regression_coefs_epv:
     input:
-        shap_table="results/shap/{shap_model}/{tissue}_shap_table_{shap_model}.csv",
+        shap_table="results/shap_importance/shap_analysis/tables/{shap_model}/{tissue}.csv",
         enrichment=expand(
-            "results/training_data/unfiltered/hrs{window}/motif_enrichment_hrs{window}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/motif_enrichment.csv",
             window=config["windows"],
         ),
         y=expand(
-            "results/training_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
             window=config["windows"],
         ),
         motif_names="data/motif_names.tsv",
     output:
-        summary="results/regression_coefs/{shap_model}/epv_{epv}/{tissue}_summary.csv",
-        coeffs_pdf="results/figures/regression_coefs/{shap_model}/epv_{epv}/{tissue}_coefficients.pdf",
-        coeffs_png="results/figures/regression_coefs/{shap_model}/epv_{epv}/{tissue}_coefficients.png",
-        volcano_pdf="results/figures/regression_coefs/{shap_model}/epv_{epv}/{tissue}_volcano.pdf",
-        volcano_png="results/figures/regression_coefs/{shap_model}/epv_{epv}/{tissue}_volcano.png",
+        summary="results/first_logit_model/regression_coefs/tables/{shap_model}/epv_{epv}/{tissue}.csv",
+        coeffs_pdf="results/first_logit_model/regression_coefs/figures/{shap_model}/epv_{epv}/{tissue}_coefficients.pdf",
+        coeffs_png="results/first_logit_model/regression_coefs/figures/{shap_model}/epv_{epv}/{tissue}_coefficients.png",
+        volcano_pdf="results/first_logit_model/regression_coefs/figures/{shap_model}/epv_{epv}/{tissue}_volcano.pdf",
+        volcano_png="results/first_logit_model/regression_coefs/figures/{shap_model}/epv_{epv}/{tissue}_volcano.png",
     log:
         "logs/regression_coefs/{shap_model}_epv_{epv}_{tissue}.log"
     conda:
@@ -90,17 +90,17 @@ rule regression_coefs_epv:
 
 rule logit_regression_aucroc_binsearch:
     input:
-        summary="results/regression_coefs/{shap_model}/binsearch/{tissue}_summary.csv",
+        summary="results/first_logit_model/regression_coefs/tables/{shap_model}/binsearch/{tissue}.csv",
         enrichment=expand(
-            "results/training_data/unfiltered/hrs{window}/motif_enrichment_hrs{window}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/motif_enrichment.csv",
             window=config["windows"],
         ),
         y=expand(
-            "results/training_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
             window=config["windows"],
         ),
     output:
-        "results/logit_regression_cv_aucroc/{shap_model}/{tissue}_logit_cv_results_binsearch.csv"
+        "results/first_logit_model/logit_regression_aucroc/tables/{shap_model}/binsearch/{tissue}.csv"
     log:
         "logs/logit_regression_aucroc/{shap_model}_binsearch_{tissue}.log"
     conda:
@@ -120,19 +120,19 @@ rule logit_regression_aucroc_binsearch:
 rule logit_regression_aucroc_epv:
     input:
         summaries=expand(
-            "results/regression_coefs/{{shap_model}}/epv_{epv}/{{tissue}}_summary.csv",
+            "results/first_logit_model/regression_coefs/tables/{{shap_model}}/epv_{epv}/{{tissue}}.csv",
             epv=config["epv_values"],
         ),
         enrichment=expand(
-            "results/training_data/unfiltered/hrs{window}/motif_enrichment_hrs{window}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/motif_enrichment.csv",
             window=config["windows"],
         ),
         y=expand(
-            "results/training_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
+            "results/prepare_data/unfiltered/hrs{window}/y_{{tissue}}.csv",
             window=config["windows"],
         ),
     output:
-        "results/logit_regression_cv_aucroc/{shap_model}/{tissue}_logit_cv_results_epv_sweep.csv"
+        "results/first_logit_model/logit_regression_aucroc/tables/{shap_model}/epv_sweep/{tissue}.csv"
     log:
         "logs/logit_regression_aucroc/{shap_model}_epv_sweep_{tissue}.log"
     params:

@@ -2,6 +2,9 @@
 
 snakemake \
     --snakefile src/snakemake/Snakefile \
+    --use-conda \
     --cores 1 \
     --printshellcmds \
-    --reason
+    --reason \
+    --keep-going \
+    all

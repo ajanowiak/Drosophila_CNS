@@ -15,19 +15,18 @@ sweep - exactly one feature set exists per tissue - so it evaluates that
 one set and produces a single-row table in the same schema.
 
 Inputs:
-  - results/regression_coefs/<shap_model>/<selection_tag>/<tissue>_summary.csv
+  - results/first_logit_model/regression_coefs/tables/<shap_model>/<selection_tag>/<tissue>.csv
     (one per epv value in epv mode, or the single binsearch one)
-  - results/training_data/unfiltered/hrs<window>/motif_enrichment_hrs<window>.csv
-  - results/training_data/unfiltered/hrs<window>/y_<tissue>.csv
+  - results/prepare_data/unfiltered/hrs<window>/motif_enrichment.csv
+  - results/prepare_data/unfiltered/hrs<window>/y_<tissue>.csv
 
 Outputs:
-  - results/logit_regression_cv_aucroc/<shap_model>/<tissue>_logit_cv_results_epv_sweep.csv (epv mode)
-  - results/logit_regression_cv_aucroc/<shap_model>/<tissue>_logit_cv_results_binsearch.csv (binsearch mode)
+  - results/first_logit_model/logit_regression_aucroc/tables/<shap_model>/<mode_tag>/<tissue>.csv
+    (<mode_tag> is "binsearch" (single row) or "epv_sweep" (multi-row, one per epv value))
 """
 
 import argparse
 import logging
-import os
 from pathlib import Path
 
 import pandas as pd
@@ -37,6 +36,7 @@ from core.constants import MODELS, FeatureMode, FeatureSelectionMode
 from core.features import stack_windows
 from core.log import configure_logging
 from core.logit_analysis import logit_cross_validate
+from core.paths import logit_regression_aucroc_table_path, regression_coefs_table_path
 from first_logit_model.features import feature_selection_tag
 from first_logit_model.io import extract_used_features
 
@@ -68,7 +68,7 @@ def evaluate_selection(
     splitter = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
     mean_auc, std_auc = logit_cross_validate(X, y, splitter, stratify_target=composite)
 
-    summary_path = f"results/regression_coefs/{shap_model}/{selection_tag}/{tissue}_summary.csv"
+    summary_path = regression_coefs_table_path(shap_model, selection_tag, tissue)
     regression_summary = pd.read_csv(summary_path)
 
     num_significant_bh = (regression_summary["p_adjusted_bh"] < p_value_threshold).sum()
@@ -134,9 +134,8 @@ def main() -> None:
 
     mode_tag = "epv_sweep" if args.feature_selection_mode == FeatureSelectionMode.EPV else "binsearch"
 
-    output_dir = f"results/logit_regression_cv_aucroc/{args.shap_model}"
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = f"{output_dir}/{args.tissue}_logit_cv_results_{mode_tag}.csv"
+    output_path = logit_regression_aucroc_table_path(args.shap_model, mode_tag, args.tissue)
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     columns = ["selection", "num_features", "num_features_significant_bh", "mean_auc", "std_auc"]
 
     if not all_results:

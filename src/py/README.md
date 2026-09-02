@@ -21,6 +21,9 @@ Shared code, importable from any stage.
   search feature-count selector. Shared by Stage 3 and Stage 4.
 - `logit_plots.py` - coefficient and volcano plots for a fitted Logit
   summary.
+- `paths.py` - builds every `results/` path. Single source of truth for the
+  `results/<stage>/<rule>/...` layout, so it isn't re-derived independently
+  in each stage's `io.py`.
 
 ## prepare_data/ - Stage 0
 

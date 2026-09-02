@@ -5,13 +5,15 @@ I/O helpers for logit_regression_significant_features.py: extracting the
 significant feature list from regression_coefs.py's output, and saving
 this stage's own summary and CV-result tables.
 
-Inputs: results/regression_coefs/<shap_model>/<selection_tag>/<tissue>_summary.csv
+Inputs: results/first_logit_model/regression_coefs/tables/<shap_model>/<selection_tag>/<tissue>.csv
 Outputs: none (returns the significant feature list; save_* persist results).
 """
 
 import os
 
 import pandas as pd
+
+from core.paths import regression_coefs_table_path
 
 
 def extract_significant_features(
@@ -21,7 +23,7 @@ def extract_significant_features(
     Extract motif IDs with BH-adjusted p-value < p_value_threshold from
     regression_coefs.py's output for the same (tissue, shap_model, selection_tag).
     """
-    summary_path = f"results/regression_coefs/{shap_model}/{selection_tag}/{tissue}_summary.csv"
+    summary_path = regression_coefs_table_path(shap_model, selection_tag, tissue)
 
     if not os.path.exists(summary_path):
         raise FileNotFoundError(f"Summary file not found: {summary_path}")

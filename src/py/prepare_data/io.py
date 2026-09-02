@@ -145,7 +145,6 @@ def load_metadata(metadata_path: str = "data/atac_meta.rds") -> pd.DataFrame:
 def save_enrichment_matrix(
     enrichment_df: pd.DataFrame,
     group: str,
-    window: str,
     output_dir: Path,
     filtering_mode: FilteringMode,
 ) -> None:
@@ -155,8 +154,8 @@ def save_enrichment_matrix(
     Args:
         enrichment_df: Enrichment matrix (loops × motifs).
         group: Group name (tissue name, "all", etc.).
-        window: Time window (e.g. "06-08").
-        output_dir: Directory where enrichment matrices should be written.
+        output_dir: Directory (already window-specific) where the enrichment
+            matrix should be written.
         filtering_mode: Grouping strategy that produced this matrix. Only
             REFINED_ANNOTATIONS can produce more than one group per window,
             so only it needs the group name in the file name to avoid
@@ -171,15 +170,14 @@ def save_enrichment_matrix(
     )
 
     if filtering_mode == FilteringMode.REFINED_ANNOTATIONS:
-        output_path = output_dir / f"{group}_motif_enrichment_hrs{window}.csv"
+        output_path = output_dir / f"{group}_motif_enrichment.csv"
     else:
-        output_path = output_dir / f"motif_enrichment_hrs{window}.csv"
+        output_path = output_dir / "motif_enrichment.csv"
     enrichment_df.to_csv(output_path)
 
 
 def save_global_count_table(
     global_count_df: pd.DataFrame,
-    window: str,
     output_dir: Path,
 ) -> None:
     """
@@ -187,11 +185,11 @@ def save_global_count_table(
 
     Args:
         global_count_df: Loop × group table of 1-1 cell counts.
-        window: Time window (e.g. "06-08").
-        output_dir: Directory where the count table should be written.
+        output_dir: Directory (already window-specific) where the count
+            table should be written.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    output_path = output_dir / f"count11_all_tissues_hrs{window}.csv"
+    output_path = output_dir / "count11_all_tissues.csv"
     global_count_df.to_csv(output_path)
 

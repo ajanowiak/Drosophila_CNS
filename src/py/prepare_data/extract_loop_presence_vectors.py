@@ -15,7 +15,7 @@ Inputs:
     tissue/window presence columns, indexed by loop_id)
 
 Outputs:
-  - results/training_data/<filtering_mode>/hrs<window>/y_<tissue>.csv
+  - results/prepare_data/<filtering_mode>/hrs<window>/y_<tissue>.csv
 """
 
 import argparse
