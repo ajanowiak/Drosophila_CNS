@@ -1,8 +1,10 @@
-# ignore everything but README.md
+# ignore everything except README.md and any nested figures/ directory.
+# figures/ now lives inside each stage/rule directory (e.g.
+# train_full_models/train_time_agnostic/figures/) rather than as one
+# top-level directory, so !*/ lets git traverse every directory and
+# !**/figures/** re-includes files under any of them, at any depth.
 *
+!*/
 !README.md
 !.gitignore
-!figures/
-!figures/**
-!data/
-!data/**
+!**/figures/**

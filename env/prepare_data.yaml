@@ -1,0 +1,14 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.13.9
+  - pandas=2.3.3
+  - numpy=2.2.6
+  - pyreadr=0.5.3
+  # core.constants (imported by every stage via PYTHONPATH=src/py, including
+  # prepare_data) pulls in sklearn/xgboost for its MODELS registry even
+  # though prepare_data itself never trains a model - pinned here just to
+  # satisfy that import.
+  - scikit-learn=1.7.2
+  - xgboost=3.4.1
