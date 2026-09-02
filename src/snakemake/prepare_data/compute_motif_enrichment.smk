@@ -10,7 +10,9 @@ rule compute_motif_enrichment:
         metadata="data/atac_meta.rds",
 
     output:
-        touch("results/prepare_data/{filtering_mode}/hrs{window}/.done")
+        done=touch("results/prepare_data/{filtering_mode}/hrs{window}/.done"),
+        motif_enrichment="results/prepare_data/{filtering_mode}/hrs{window}/motif_enrichment.csv",
+        count11_all_tissues="results/prepare_data/{filtering_mode}/hrs{window}/count11_all_tissues.csv",
 
     log:
         "logs/compute_motif_enrichment/{filtering_mode}_hrs{window}.log"
