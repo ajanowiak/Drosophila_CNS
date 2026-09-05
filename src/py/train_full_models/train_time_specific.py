@@ -5,8 +5,8 @@ Trains one binary classifier for a single (model, tissue, window) - the
 time-specific training mode.
 
 Inputs:
-  - data/training/hrs<window>/data_diff_hrs<window>.csv (motif enrichment features)
-  - data/training/hrs<window>/y_<tissue>.csv (binary loop-presence labels)
+  - results/prepare_data/unfiltered/hrs<window>/motif_enrichment.csv
+  - results/prepare_data/unfiltered/hrs<window>/y_<tissue>.csv
 
 Outputs:
   - results/train_full_models/train_time_specific/models/cv/<model>/hrs<window>/<tissue>.pkl
@@ -24,6 +24,7 @@ import numpy as np
 from sklearn.model_selection import KFold
 
 from core.constants import MODELS, TIME_SPECIFIC_MODEL_PARAMS, WINDOWS
+from core.features import load_single_window
 from core.log import configure_logging
 from core.paths import (
     train_time_specific_figure_dir,
@@ -32,7 +33,7 @@ from core.paths import (
     train_time_specific_summary_path,
 )
 from train_full_models.cv import cross_validate, fit_full_data_model
-from train_full_models.io import load_time_specific_features, save_model, save_cv_result, save_summary_row
+from train_full_models.io import save_model, save_cv_result, save_summary_row
 from train_full_models.plotting import plot_roc
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ def run_time_specific(model: str, tissue: str, window: str, n_splits: int) -> di
 
     logger.info(f"Time-specific training: {full} | {tissue} | hrs{window}")
 
-    X, y = load_time_specific_features(tissue, window)
+    X, y = load_single_window(tissue, window)
 
     splitter = KFold(n_splits=n_splits, shuffle=True, random_state=0)
     result = cross_validate(classifier, X, y, splitter, stratify_target=None)

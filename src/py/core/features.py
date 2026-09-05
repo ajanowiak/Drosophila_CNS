@@ -119,3 +119,17 @@ def stack_windows(
     )
 
     return X, y, composite
+
+
+def load_single_window(
+    tissue: str,
+    window: str,
+    training_dir: str = prepare_data_dir("unfiltered"),
+) -> tuple[pd.DataFrame, pd.Series]:
+    """
+    Load one window's motif enrichment features and presence labels for the
+    time-specific training mode - no stacking across windows, just
+    stack_windows()'s per-window loading and NaN handling for a single window.
+    """
+    X, y, _ = stack_windows(tissue, feature_mode=FeatureMode.CURRENT, windows=[window], training_dir=training_dir)
+    return X, y

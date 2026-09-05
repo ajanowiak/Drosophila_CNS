@@ -9,12 +9,6 @@ import pandas as pd
 from core.constants import TISSUES, WINDOWS
 from core.paths import train_time_specific_summary_path, train_time_agnostic_summary_path
 
-def load_time_specific_features(tissue: str, window: str) -> tuple[pd.DataFrame, pd.Series]:
-    """Load and align the motif enrichment features and labels for one (tissue, window)."""
-    X = pd.read_csv(f"data/training/hrs{window}/data_diff_hrs{window}.csv", index_col=0)
-    y = pd.read_csv(f"data/training/hrs{window}/y_{tissue}.csv", index_col=0).iloc[:, 0]
-    return X.loc[y.index], y
-
 def save_model(model, path: str) -> None:
     """Pickle a fitted model, creating its parent directory if needed."""
     os.makedirs(os.path.dirname(path), exist_ok=True)

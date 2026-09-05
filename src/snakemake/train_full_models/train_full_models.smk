@@ -59,8 +59,8 @@ rule train_time_agnostic:
 
 rule train_time_specific:
     input:
-        X="data/training/hrs{window}/data_diff_hrs{window}.csv",
-        y="data/training/hrs{window}/y_{tissue}.csv",
+        X="results/prepare_data/unfiltered/hrs{window}/motif_enrichment.csv",
+        y="results/prepare_data/unfiltered/hrs{window}/y_{tissue}.csv",
     output:
         model_cv="results/train_full_models/train_time_specific/models/cv/{model}/hrs{window}/{tissue}.pkl",
         model_all="results/train_full_models/train_time_specific/models/all_data/{model}/hrs{window}/{tissue}.pkl",
