@@ -1,0 +1,33 @@
+# config/human_prototype.yml
+#
+# Human-brain loop-prediction prototype. Separate from the Drosophila
+# config/config.yml; the two pipelines share no configuration.
+
+# Sample: MM_417 (A46 / dlPFC), neuron-viable (~17% neurons).
+sample: "MM_417"
+snap: "data/human_prototype/raw/GSM7822145_MM_417.snap"
+genome: "data/human_prototype/ref/hg38.fa"
+annotation: "data/human_prototype/annotation/TableS3_single_nuclei_metatable.gz"
+raw_dir: "data/human_prototype/raw"
+
+# 3 ATAC cell sets x 3 loop-presence labels = 9 classifiers.
+cell_sets:
+  - "neuron"
+  - "non_neuron"
+  - "all"
+
+conditions:
+  - "fetal"
+  - "glia"
+  - "neuron"
+
+min_fragments: 1000       # unique-fragment QC threshold
+overlap_frac: 0.5         # reciprocal anchor overlap to merge two loop calls
+min_cells_per_peak: 25    # chromVAR peak accessibility filter (also bounds memory)
+bg_iterations: 25         # chromVAR background peak sets
+jaspar_release: "JASPAR2026"
+model: "XGB"
+n_splits: 10
+
+# chromVAR is the one heavy step; these bound its BLAS threads.
+blas_threads: 12

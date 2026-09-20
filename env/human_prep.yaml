@@ -1,0 +1,26 @@
+# Human-prototype preprocessing environment: reading the GEO .snap HDF5,
+# chromVAR motif deviations (pychromvar), and fragment/anchor overlap.
+name: human_prep
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - scipy
+  - h5py
+  - anndata
+  - pysam
+  - pyranges
+  - scikit-learn
+  - matplotlib
+  - tqdm
+  - pyyaml
+  - pip
+  - pip:
+      - pychromvar
+      - pyjaspar
+      - MOODS-python
+      - xgboost
+      - pyreadr
