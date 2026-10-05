@@ -14,13 +14,13 @@ loops_base_url: "https://pengfei-mssm.s3.amazonaws.com"
 genome: "data/human_prototype/ref/hg38.fa"
 # UCSC hg38 FASTA (gzipped); download_genome fetches, decompresses and indexes it (.fai).
 genome_url: "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz"
+# CATlas (Li 2023) full single-nucleus metatable (hba.whole.final.meta), gzipped,
+# provided MANUALLY on the server (no stable download URL). annotate_cells needs the
+# barcode/sample/cellclass/subclass/celltype columns, so this must be the FULL CATlas
+# metatable - NOT the paper's 3-column supplementary "Table S3 ... .txt" (sample,
+# barcode, celltype only), which lacks cellclass/subclass. Upload the repo's own
+# validated file (data/human_prototype/annotation/TableS3_single_nuclei_metatable.gz).
 annotation: "data/human_prototype/annotation/TableS3_single_nuclei_metatable.gz"
-# CATlas (Li 2023) single-nucleus metatable, gzipped; download_annotation fetches it.
-# TODO(confirm): placeholder - replace with the exact CATlas/NEMO URL you downloaded
-# from (the Supplementary_Tables path has moved; this is a best-effort guess and must
-# be verified before a fresh-host run). annotate_cells reads the .gz directly, so the
-# URL must point at a GZIPPED metatable (hba.whole.final.meta.txt.gz).
-annotation_url: "http://catlas.org/catlasv1/humanbrain/data/Supplementary_Tables/hba.whole.final.meta.txt.gz"
 raw_dir: "data/human_prototype/raw"
 # JASPAR CORE vertebrate motifs (PFM flat file); download_jaspar fetches it.
 jaspar: "data/human_prototype/ref/JASPAR2026_CORE_vertebrates.jaspar"

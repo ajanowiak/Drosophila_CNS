@@ -5,13 +5,14 @@ Download one input file for the human prototype.
 
 Used for the GSE244618 `.snap.gz` (with `--gunzip`, which decompresses to the
 `.snap` the pipeline reads and drops the compressed copy), the Rahman loop BEDs
-(kept gzipped, as `build_loop_universe` reads `.bed.gz` directly), the hg38 FASTA
-(with `--gunzip --faidx`, which also writes the `.fai` index chromVAR's FaFile
-needs), and the CATlas annotation metatable.
+(kept gzipped, as `build_loop_universe` reads `.bed.gz` directly), the JASPAR PFMs,
+and the hg38 FASTA (with `--gunzip --faidx`, which also writes the `.fai` index
+chromVAR's FaFile needs). The CATlas annotation metatable has no stable URL and is
+provided manually, so it is not downloaded here.
 
 Inputs:
-  - a download URL (config `snap_url` / `loops_base_url` / `genome_url` /
-    `annotation_url`)
+  - a download URL (config `snap_url` / `loops_base_url` / `jaspar_url` /
+    `genome_url`)
 Outputs:
   - the file at --output (plus `<output>.fai` when --faidx is given)
 """

@@ -35,10 +35,11 @@ define anchor openness. Parameters, sample and paths live in
 - `download.py` - download one input file: this sample's `.snap.gz` from GEO
   (config `snap_url`, with `--gunzip`), a Rahman loop BED from the public S3
   bucket (config `loops_base_url`, kept gzipped), the JASPAR PFMs (`jaspar_url`),
-  the hg38 FASTA (`genome_url`, with `--gunzip --faidx` so the `.fai` chromVAR
-  needs is written too), or the CATlas metatable (`annotation_url`). Each has a
-  `download_*` Snakemake rule whose output is the exact config path the pipeline
-  reads, so a fresh host fetches every input automatically.
+  or the hg38 FASTA (`genome_url`, with `--gunzip --faidx` so the `.fai` chromVAR
+  needs is written too). Each has a `download_*` Snakemake rule whose output is the
+  exact config path the pipeline reads, so a fresh host fetches these automatically.
+  The CATlas atlas metatable (`annotation`) has no stable URL and is placed on the
+  host manually.
 - `build_loop_universe.py` - per-condition loop sets (positives + disjoint-
   rectangle negatives) from the three Rahman loop BEDs; one table, one label
   column per condition. Each loop is a rectangle on the Hi-C plane (anchor 1 x

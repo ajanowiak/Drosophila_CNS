@@ -94,24 +94,9 @@ rule download_genome:
         """
 
 
-# Download the CATlas (Li 2023) single-nucleus metatable (Table S3), kept gzipped
-# as annotate_cells reads the .gz directly. Produces config["annotation"].
-rule download_annotation:
-    output:
-        config["annotation"]
-    params:
-        url=config["annotation_url"],
-    log:
-        "logs/human_prototype/download_annotation.log"
-    conda:
-        "../../../env/human_prep.yaml"
-    shell:
-        """
-        PYTHONPATH=src/py python src/py/human_prepare_data/download.py \
-            --url {params.url} \
-            --output {output} \
-            --log_path {log}
-        """
+# NOTE: the CATlas (Li 2023) metatable (config["annotation"]) has no stable download
+# URL and is provided manually on the server, so it has no rule here; annotate_cells
+# consumes it as an existing input (Snakemake errors clearly if it is absent).
 
 
 # Per-condition Rahman loop sets (positives + clean negatives), one table with a
