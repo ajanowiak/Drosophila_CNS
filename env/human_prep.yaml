@@ -1,5 +1,6 @@
 # Human-prototype preprocessing environment: reading the GEO .snap HDF5,
-# chromVAR motif deviations (pychromvar), and fragment/anchor overlap.
+# fragment/anchor overlap, and the Stage 0/1 math. chromVAR runs in R
+# (env/human_prep_r.yaml).
 name: human_prep
 channels:
   - conda-forge
@@ -12,15 +13,14 @@ dependencies:
   - h5py
   - anndata
   - pysam
-  - pyranges
+  - pyranges          # anchor_openness fragment/anchor overlap
+  - bedtools          # backs pybedtools (build_loop_universe)
+  - pybedtools        # build_loop_universe anchor-overlap fractions
   - scikit-learn
   - matplotlib
   - tqdm
   - pyyaml
   - pip
   - pip:
-      - pychromvar
-      - pyjaspar
-      - MOODS-python
       - xgboost
       - pyreadr

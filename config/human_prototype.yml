@@ -6,9 +6,25 @@
 # Sample: MM_417 (A46 / dlPFC), neuron-viable (~17% neurons).
 sample: "MM_417"
 snap: "data/human_prototype/raw/GSM7822145_MM_417.snap"
+# GEO supplementary .snap.gz for this sample; download_snap fetches and decompresses it.
+snap_url: "https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7822nnn/GSM7822145/suppl/GSM7822145_MM_417.snap.gz"
+# Public S3 bucket (Rahman et al. 2023) for the per-condition loop BEDs; download_loop_bed
+# fetches "<loops_base_url>/<condition>_loop.bed.gz".
+loops_base_url: "https://pengfei-mssm.s3.amazonaws.com"
 genome: "data/human_prototype/ref/hg38.fa"
+# UCSC hg38 FASTA (gzipped); download_genome fetches, decompresses and indexes it (.fai).
+genome_url: "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz"
 annotation: "data/human_prototype/annotation/TableS3_single_nuclei_metatable.gz"
+# CATlas (Li 2023) single-nucleus metatable, gzipped; download_annotation fetches it.
+# TODO(confirm): placeholder - replace with the exact CATlas/NEMO URL you downloaded
+# from (the Supplementary_Tables path has moved; this is a best-effort guess and must
+# be verified before a fresh-host run). annotate_cells reads the .gz directly, so the
+# URL must point at a GZIPPED metatable (hba.whole.final.meta.txt.gz).
+annotation_url: "http://catlas.org/catlasv1/humanbrain/data/Supplementary_Tables/hba.whole.final.meta.txt.gz"
 raw_dir: "data/human_prototype/raw"
+# JASPAR CORE vertebrate motifs (PFM flat file); download_jaspar fetches it.
+jaspar: "data/human_prototype/ref/JASPAR2026_CORE_vertebrates.jaspar"
+jaspar_url: "https://jaspar.elixir.no/download/data/2026/CORE/JASPAR2026_CORE_vertebrates_non-redundant_pfms_jaspar.txt"
 
 # 3 ATAC cell sets x 3 loop-presence labels = 9 classifiers.
 cell_sets:
@@ -22,10 +38,11 @@ conditions:
   - "neuron"
 
 min_fragments: 1000       # unique-fragment QC threshold
-overlap_frac: 0.5         # reciprocal anchor overlap to merge two loop calls
-min_cells_per_peak: 25    # chromVAR peak accessibility filter (also bounds memory)
-bg_iterations: 25         # chromVAR background peak sets
-jaspar_release: "JASPAR2026"
+                          # Loop-universe negatives use the parameter-free disjoint-rectangles rule:
+                          # a cross-condition loop is a negative unless its Hi-C rectangle coincides
+                          # with a real loop of the condition (pairToPair -type both); no threshold.
+min_cells_per_peak: 1     # keep every accessible peak (chromVAR default; filterPeaks drops the rest)
+bg_iterations: 50         # chromVAR background peak sets (chromVAR default)
 model: "XGB"
 n_splits: 10
 

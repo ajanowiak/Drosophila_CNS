@@ -8,7 +8,114 @@ rule all_prepare_data:
         prepare_data_targets()
 
 
-# Rahman loop universe with per-condition presence; built once.
+# Download + decompress this sample's .snap from GEO (only the current sample).
+# Produces config["snap"], the input every SNAP-reading rule below consumes, so
+# on a fresh host Snakemake fetches it automatically; skipped if it already exists.
+rule download_snap:
+    output:
+        config["snap"]
+    params:
+        url=config["snap_url"],
+    log:
+        "logs/human_prototype/download_snap.log"
+    conda:
+        "../../../env/human_prep.yaml"
+    shell:
+        """
+        PYTHONPATH=src/py python src/py/human_prepare_data/download.py \
+            --url {params.url} \
+            --output {output} \
+            --gunzip \
+            --log_path {log}
+        """
+
+
+# Download the JASPAR CORE vertebrate motif PFMs (plain text) from the JASPAR site.
+rule download_jaspar:
+    output:
+        config["jaspar"]
+    params:
+        url=config["jaspar_url"],
+    log:
+        "logs/human_prototype/download_jaspar.log"
+    conda:
+        "../../../env/human_prep.yaml"
+    shell:
+        """
+        PYTHONPATH=src/py python src/py/human_prepare_data/download.py \
+            --url {params.url} \
+            --output {output} \
+            --log_path {log}
+        """
+
+
+# Download one condition's Rahman loop BED (kept gzipped) from the public S3 bucket.
+rule download_loop_bed:
+    output:
+        f"{config['raw_dir']}/{{condition}}_loop.bed.gz"
+    params:
+        url=lambda wildcards: f"{config['loops_base_url']}/{wildcards.condition}_loop.bed.gz",
+    wildcard_constraints:
+        condition="|".join(config["conditions"]),
+    log:
+        "logs/human_prototype/download_loop_bed/{condition}.log"
+    conda:
+        "../../../env/human_prep.yaml"
+    shell:
+        """
+        PYTHONPATH=src/py python src/py/human_prepare_data/download.py \
+            --url {params.url} \
+            --output {output} \
+            --log_path {log}
+        """
+
+
+# Download + decompress the hg38 FASTA and build its .fai index. compute_chromvar
+# (R, FaFile) reads config["genome"] and needs the .fai sitting next to it, so both
+# are declared as outputs and fetched automatically on a fresh host.
+rule download_genome:
+    output:
+        fasta=config["genome"],
+        fai=f"{config['genome']}.fai",
+    params:
+        url=config["genome_url"],
+    log:
+        "logs/human_prototype/download_genome.log"
+    conda:
+        "../../../env/human_prep.yaml"
+    shell:
+        """
+        PYTHONPATH=src/py python src/py/human_prepare_data/download.py \
+            --url {params.url} \
+            --output {output.fasta} \
+            --gunzip \
+            --faidx \
+            --log_path {log}
+        """
+
+
+# Download the CATlas (Li 2023) single-nucleus metatable (Table S3), kept gzipped
+# as annotate_cells reads the .gz directly. Produces config["annotation"].
+rule download_annotation:
+    output:
+        config["annotation"]
+    params:
+        url=config["annotation_url"],
+    log:
+        "logs/human_prototype/download_annotation.log"
+    conda:
+        "../../../env/human_prep.yaml"
+    shell:
+        """
+        PYTHONPATH=src/py python src/py/human_prepare_data/download.py \
+            --url {params.url} \
+            --output {output} \
+            --log_path {log}
+        """
+
+
+# Per-condition Rahman loop sets (positives + clean negatives), one table with a
+# label column per condition; built once.
 rule build_loop_universe:
     input:
         fetal=f"{config['raw_dir']}/fetal_loop.bed.gz",
@@ -24,7 +131,6 @@ rule build_loop_universe:
         """
         PYTHONPATH=src/py python src/py/human_prepare_data/build_loop_universe.py \
             --raw_dir {config[raw_dir]} \
-            --frac {config[overlap_frac]} \
             --output {output} \
             --log_path {log}
         """
@@ -60,25 +166,26 @@ rule compute_chromvar:
     input:
         snap=config["snap"],
         genome=config["genome"],
+        genome_fai=f"{config['genome']}.fai",
+        motifs=config["jaspar"],
         metadata="data/human_prototype/interim/cell_metadata.tsv",
     output:
         "data/human_prototype/interim/motifs_chromvar_all.tsv"
     log:
         "logs/human_prototype/compute_chromvar.log"
     conda:
-        "../../../env/human_prep.yaml"
+        "../../../env/human_prep_r.yaml"
     shell:
         """
-        export OPENBLAS_NUM_THREADS={config[blas_threads]} OMP_NUM_THREADS={config[blas_threads]} \
-               MKL_NUM_THREADS={config[blas_threads]} NUMEXPR_NUM_THREADS={config[blas_threads]}
-        PYTHONPATH=src/py python src/py/human_prepare_data/compute_chromvar.py \
+        export OPENBLAS_NUM_THREADS={config[blas_threads]} OMP_NUM_THREADS={config[blas_threads]}
+        Rscript src/R/human_prepare_data/compute_chromvar.R \
             --snap {input.snap} \
             --metadata {input.metadata} \
             --genome {input.genome} \
+            --motifs {input.motifs} \
             --cell_label all \
             --min_cells_per_peak {config[min_cells_per_peak]} \
             --bg_iterations {config[bg_iterations]} \
-            --jaspar_release {config[jaspar_release]} \
             --output {output} \
             --log_path {log}
         """
