@@ -1,12 +1,14 @@
 # human_prepare_data/run_stage0_human.py
 
 """
-Human Stage 0 driver: motif-enrichment matrix + per-condition loop-presence
-vectors.
+Human Stage 0 driver: motif-enrichment matrix + per-condition label vectors.
 
 Reuses the Drosophila enrichment math (compute_group_enrichment) unchanged; the
 only human glue is aligning the loop-activity and chromVAR matrices on shared
-cells and writing per-condition presence vectors from the loop universe.
+cells and writing each condition's label vector from the loop table. Enrichment
+is loop-local, so the one enrichment matrix per cell set doubles as every
+condition's feature matrix - each y_<condition> just selects that condition's
+rows (positives + clean negatives; excluded loops are dropped).
 
 Inputs:
   - loops_activity.tsv, motifs_chromvar.tsv, loop_universe.tsv
@@ -67,9 +69,14 @@ def main() -> None:
 
     loop_table = pd.read_csv(args.loop_table, sep="\t").set_index("loop_id")
     for cond in CONDITIONS:
-        y = loop_table.loc[enrichment_df.index, f"Human_{cond}"].astype(int)
+        # Each condition has its own loop set: positives (label 1) + clean
+        # negatives (label 0). Loops excluded for this condition are NaN, so
+        # dropping them makes y_<cond> restrict the shared enrichment matrix to
+        # exactly this condition's loops (its own feature matrix, by row).
+        y = loop_table.loc[enrichment_df.index, f"label_{cond}"].dropna().astype(int)
         y.to_csv(args.output_dir / f"y_{cond}.csv")
-        logger.info(f"  y_{cond}: {int(y.sum())} positives / {len(y)} loops")
+        logger.info(f"  y_{cond}: {int(y.sum())} positives / {int((y == 0).sum())} negatives "
+                    f"({len(y)} loops)")
 
     logger.info("Stage 0 done.")
 

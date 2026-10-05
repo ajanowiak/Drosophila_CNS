@@ -27,11 +27,14 @@ def check_equal_loop_counts(summary: pd.DataFrame) -> None:
     """Checkpoint: for each loop-presence label, every cell set trained on the
     same number of loops.
 
-    Cell sets differ only in which cells define the both-open "11" state, not in
-    which loops exist. With NaN-tolerant XGBoost no loop is dropped, so the
-    per-condition loop counts must be identical across cell sets. A mismatch
-    means loops were silently dropped somewhere and the classifiers are no
-    longer comparable across cell sets.
+    Conditions now have different loop sets (each has its own positives + clean
+    negatives), so loop counts differ ACROSS conditions - but a single
+    condition's loop set is pure loop geometry, independent of the cell set.
+    Cell sets differ only in which cells define the both-open "11" state, and
+    NaN-tolerant XGBoost drops no loop, so within one condition the loop count
+    must be identical across cell sets. A mismatch means loops were silently
+    dropped somewhere and that condition's classifiers are no longer comparable
+    across cell sets.
     """
     for cond, grp in summary.groupby("condition"):
         counts = grp.set_index("cell_set")["n_loops"]

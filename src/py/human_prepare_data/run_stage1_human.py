@@ -5,8 +5,9 @@ Human Stage 1 driver: condition-specific loop-presence classifier.
 
 Reuses the Drosophila CV harness (cross_validate), ROC plotting (plot_roc) and
 the exact time-specific XGBoost hyperparameters. The human glue loads the
-enrichment matrix and per-condition presence vector, drops loops with undefined
-enrichment (no both-open cell), and reports/plots ROC per condition.
+enrichment matrix and each condition's label vector (its positives + clean
+negatives), drops loops with undefined enrichment (no both-open cell), and
+reports/plots ROC per condition.
 
 Inputs (results/human_prototype/prepare_data/):
   - motif_enrichment.csv, y_<condition>.csv, n_cells.txt
@@ -89,22 +90,28 @@ def run_condition(enrichment: pd.DataFrame, y: pd.Series, model: str, n_splits: 
     return row, result
 
 
-def plot_combined_roc(results: dict[str, CVResult], model: str, cell_set: str,
-                      n_loops: int, n_features: int, n_cells: int, out_dir: Path) -> None:
-    """Overlay every condition's ROC curve into one figure."""
+def plot_combined_roc(results: dict[str, CVResult], n_loops_by_cond: dict[str, int],
+                      model: str, cell_set: str, n_features: int, n_cells: int,
+                      out_dir: Path) -> None:
+    """Overlay every condition's ROC curve into one figure.
+
+    Each condition now has its own loop set, so the per-condition loop count goes
+    in the legend rather than as a single figure-wide count in the title.
+    """
     full = MODELS[model]["full"]
     cells = CELL_DISPLAY.get(cell_set, cell_set)
 
     fig, ax = plt.subplots(figsize=(6, 6))
     for cond, result in results.items():
-        ax.plot(result.mean_fpr, result.mean_tpr, label=f"{cond} (AUC = {result.mean_auc:.3f})")
+        ax.plot(result.mean_fpr, result.mean_tpr,
+                label=f"{cond} (AUC = {result.mean_auc:.3f}, {n_loops_by_cond[cond]:,} loops)")
         ax.fill_between(result.mean_fpr, result.tprs_lower, result.tprs_upper, alpha=0.2)
 
     ax.plot([0, 1], [0, 1], "k--", lw=1)
     ax.grid(axis="both")
     ax.set(xlabel="False Positive Rate", ylabel="True Positive Rate",
            title=f"{full} ROC by loop label, {cells} cells\n"
-                 f"{n_loops:,} loops x {n_features:,} motifs, {n_cells:,} cells")
+                 f"{n_features:,} motifs, {n_cells:,} cells")
     ax.legend(loc="lower right")
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -151,7 +158,8 @@ def main() -> None:
                                        n_cells, result.mean_auc, result.std_auc),
                  out_paths=[fig_dir / f"roc_{cond}.{fmt}" for fmt in ("png", "pdf")])
 
-    plot_combined_roc(results, args.model, cell_set, rows[0]["n_loops"], n_features, n_cells, fig_dir)
+    plot_combined_roc(results, {r["condition"]: r["n_loops"] for r in rows},
+                      args.model, cell_set, n_features, n_cells, fig_dir)
 
     summary = pd.DataFrame(rows)
     args.output_dir.mkdir(parents=True, exist_ok=True)
