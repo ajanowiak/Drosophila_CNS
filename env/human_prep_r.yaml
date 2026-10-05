@@ -1,0 +1,20 @@
+# Human-prototype chromVAR environment (Bioconductor chromVAR, Schep et al. 2017).
+# Runs src/R/human_prepare_data/compute_chromvar.R: reads the .snap HDF5, fetches
+# JASPAR motifs, and writes the motif x cell deviation matrix.
+name: human_prep_r
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base>=4.3
+  - r-optparse
+  - r-matrix
+  - bioconductor-chromvar
+  - bioconductor-motifmatchr
+  - bioconductor-tfbstools         # readJASPARMatrix: read the JASPAR PFM file
+  - bioconductor-rhdf5             # read the SnapATAC .snap HDF5
+  - bioconductor-summarizedexperiment
+  - bioconductor-genomicranges
+  - bioconductor-rsamtools         # FaFile: reach hg38 without a BSgenome package
+  - bioconductor-biostrings
+  - bioconductor-biocparallel
