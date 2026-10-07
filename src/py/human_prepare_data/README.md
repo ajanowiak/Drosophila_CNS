@@ -18,10 +18,20 @@ from the repo root:
 
 It produces nine classifiers: 3 ATAC cell sets {neuron, non_neuron, all} x 3
 loop labels {fetal, glia, neuron}. Each condition has its OWN loop set -
-positives are that condition's loops (native coordinates) and negatives are the
-other conditions' loops whose Hi-C rectangle coincides with NO actual loop of this
-condition (the two anchors are never paired together here; see
-`build_loop_universe.py`). chromVAR is computed once on all QC nuclei
+positives are that condition's loops (native coordinates); the negatives depend
+on the config key `negatives` (see `build_loop_universe.py`):
+
+- `other_conditions` - the other conditions' loops whose Hi-C rectangle coincides
+  with NO actual loop of this condition (the two anchors are never paired
+  together here);
+- `n2` - Cupriak's `new_pairs_of_anchors`: random new pairs of this condition's
+  own anchors, `neg_pos_ratio` per positive, drawn with `random_state`.
+
+Everything from the loop universe on is written under
+`data/human_prototype/interim/<negatives>/` and `results/human_prototype/<negatives>/`
+(logs under `logs/human_prototype/<negatives>/`), so the two modes coexist. Run
+the non-default mode with e.g. `bash run_human_snakemake.sh 4 --config negatives=n2`.
+chromVAR is computed once on all QC nuclei
 (one shared motif x cell feature set); the cell sets differ only in which cells
 define anchor openness. Parameters, sample and paths live in
 `config/human_prototype.yml`. Most steps run in the `human_prep` env
@@ -40,15 +50,20 @@ define anchor openness. Parameters, sample and paths live in
   exact config path the pipeline reads, so a fresh host fetches these automatically.
   The CATlas atlas metatable (`annotation`) has no stable URL and is placed on the
   host manually.
-- `build_loop_universe.py` - per-condition loop sets (positives + disjoint-
-  rectangle negatives) from the three Rahman loop BEDs; one table, one label
-  column per condition. Each loop is a rectangle on the Hi-C plane (anchor 1 x
-  anchor 2); a cross-condition loop is EXCLUDED when its rectangle overlaps a real
-  loop of the condition (both anchors paired as in that condition), else it is a
-  NEGATIVE. The every-loop-vs-every-loop 2-D overlap test is a BEDPE `pairToPair
-  -type both` join (bedtools indexes + sweeps, output-sensitive), not an O(N*M)
-  product. Parameter-free; anchors are highly conserved across conditions, so the
-  signal is in the pairing, not the anchors.
+- `build_loop_universe.py` - per-condition loop sets (positives + negatives) from
+  the three Rahman loop BEDs; one table, one label column per condition. Each
+  loop is a rectangle on the Hi-C plane (anchor 1 x anchor 2). Mode
+  `other_conditions`: a cross-condition loop is EXCLUDED when its rectangle
+  overlaps a real loop of the condition (both anchors paired as in that
+  condition), else it is a NEGATIVE. The every-loop-vs-every-loop 2-D overlap
+  test is a BEDPE `pairToPair -type both` join (bedtools indexes + sweeps,
+  output-sensitive), not an O(N*M) product. Parameter-free; anchors are highly
+  conserved across conditions, so the signal is in the pairing, not the anchors.
+  Mode `n2`: every non-overlapping same-chromosome pair of the condition's own
+  anchors is a candidate; real loops are removed, `int(neg_pos_ratio * #loops)`
+  are drawn uniformly (seeded), and drawn pairs whose rectangle overlaps a real
+  loop are dropped (same `pairToPair` test) - in Cupriak's order. Each n2
+  negative is labelled for its own condition only (`source` = `n2_<condition>`).
 - `snap_io.py` - readers for the `.snap` HDF5 (barcodes, cell x peak + peaks,
   cell x gene, per-cell fragments).
 - `annotate_cells.py` - QC filter + per-nucleus labels joined from the Li 2023

@@ -37,11 +37,20 @@ conditions:
   - "glia"
   - "neuron"
 
+# How each condition's negative loops are drawn; every step from the loop universe
+# on writes under data/human_prototype/interim/<negatives>/ and
+# results/human_prototype/<negatives>/, so the two modes never overwrite each other.
+#   other_conditions - the other conditions' loops whose Hi-C rectangle coincides with
+#                      no real loop of the condition (pairToPair -type both); parameter-free.
+#   n2               - Cupriak's new_pairs_of_anchors: random new pairs of the condition's
+#                      own anchors, neg_pos_ratio per positive (minus the few that overlap
+#                      a real loop rectangle), drawn with random_state.
+negatives: "other_conditions"
+neg_pos_ratio: 5          # n2 only (Cupriak's human_neg_pos_ratio)
+random_state: 42          # n2 only (Cupriak's random_state)
+
 min_fragments: 1000       # unique-fragment QC threshold
-                          # Loop-universe negatives use the parameter-free disjoint-rectangles rule:
-                          # a cross-condition loop is a negative unless its Hi-C rectangle coincides
-                          # with a real loop of the condition (pairToPair -type both); no threshold.
-min_cells_per_peak: 1     # keep every accessible peak (chromVAR default; filterPeaks drops the rest)
+min_cells_per_peak: 1    # keep every accessible peak (chromVAR default; filterPeaks drops the rest)
 bg_iterations: 50         # chromVAR background peak sets (chromVAR default)
 model: "XGB"
 n_splits: 10

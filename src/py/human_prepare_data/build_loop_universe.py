@@ -5,13 +5,14 @@ Build per-condition human loop sets from the three Rahman et al. 2023 processed
 loop BED files (fetal / glia / neuron).
 
 Each condition C defines its own labelled loop set on native (per-condition)
-coordinates:
+coordinates. Positives are always condition C's own loops (label 1); how the
+negatives (label 0) are drawn is chosen with --negatives:
 
-  positives = condition C's own loops                                   (label 1)
-  negatives = the OTHER conditions' loops whose Hi-C rectangle does not
-              coincide with ANY actual C loop rectangle                 (label 0)
+  other_conditions = the OTHER conditions' loops whose Hi-C rectangle does not
+                     coincide with ANY actual C loop rectangle
+  n2               = new pairs of C's own anchors (Cupriak's "new_pairs_of_anchors")
 
-Disjoint-rectangles criterion (pairwise, against real loops)
+Mode other_conditions: disjoint-rectangles criterion (pairwise, against real loops)
 ------------------------------------------------------------
 A loop is a rectangle on the Hi-C plane: [x1, x2] x [y1, y2], the left anchor on
 one axis and the right anchor on the other. Two axis-aligned rectangles overlap
@@ -29,6 +30,24 @@ Hence, per condition C:
   - otherwise it is a clean NEGATIVE (label 0): its anchors may individually recur
     in C, but that specific pairing is absent from C.
 
+Mode n2: random re-pairing of the condition's own anchors
+--------------------------------------------------------
+A port of new_pairs_of_anchors (negative type n2) from Cupriak's repository
+(github.com/ola-cupriak/predicting-the-formation-of-chromatin-loops-using-genomic-data,
+pipelines/data_preprocessing/nodes.py), per condition C:
+  1. pool the left and right anchors of C's loops into one set of distinct anchors;
+  2. pair every two anchors on the same chromosome whose intervals do not
+     overlap (left end < right start), the left anchor first;
+  3. drop the pairs that are exactly one of C's loops;
+  4. draw int(neg_pos_ratio * #C loops) of the remaining pairs, uniformly
+     without replacement (seeded);
+  5. drop the drawn pairs whose rectangle overlaps a real C loop rectangle (the
+     same test as above). Cupriak applies this filter after the draw, so the
+     final ratio ends slightly below neg_pos_ratio.
+Anchors keep their native Rahman intervals. Every real loop is a positive of its
+own condition only, and each condition's n2 pairs are negatives of that condition
+only (label NaN elsewhere): in this mode no loop of another condition is a negative.
+
 All three condition sets are emitted as one table of native loops (no coordinate
 merging) with one label column per condition. Downstream (anchor openness, motif
 enrichment, training) reads label_<C> for condition C and drops the excluded
@@ -37,8 +56,9 @@ enrichment, training) reads label_<C> for condition C and drops the excluded
 Inputs:
   - data/human_prototype/raw/{fetal,glia,neuron}_loop.bed.gz
 Outputs:
-  - data/human_prototype/interim/loop_universe.tsv
-    (chr1 x1 x2 chr2 y1 y2 color loop_id source label_fetal label_glia label_neuron)
+  - data/human_prototype/interim/<negatives>/loop_universe.tsv
+    (chr1 x1 x2 chr2 y1 y2 color loop_id source label_fetal label_glia label_neuron;
+    source is the condition of a real loop, or n2_<C> for C's drawn negatives)
 """
 
 import argparse
@@ -52,7 +72,7 @@ import pandas as pd
 from pybedtools import BedTool
 
 from core.log import configure_logging
-from human_prepare_data.constants import CONDITIONS
+from human_prepare_data.constants import CONDITIONS, NEGATIVE_MODES
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +176,103 @@ def assign_labels(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame]) -> pd.
     return loops
 
 
-def build_loop_sets(raw_dir: Path) -> pd.DataFrame:
+def condition_anchors(c_loops: pd.DataFrame) -> pd.DataFrame:
+    """C's distinct anchors (left and right pooled), sorted by (chr, start, end)."""
+    sides = [c_loops[["chr", s, e]].set_axis(["chr", "start", "end"], axis=1)
+             for s, e in (("x1", "x2"), ("y1", "y2"))]
+    return (pd.concat(sides).drop_duplicates()
+            .sort_values(["chr", "start", "end"], ignore_index=True))
+
+
+def candidate_anchor_pairs(anchors: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """(left, right) row indices into `anchors` of every non-overlapping same-chromosome pair.
+
+    Each unordered pair appears once: anchors are sorted by start, so the earlier
+    row is the left anchor, and the pair is kept iff left end < right start
+    (Cupriak's x_end < y_start).
+    """
+    starts, ends = anchors["start"].to_numpy(), anchors["end"].to_numpy()
+
+    left, right = [], []
+    for rows in anchors.groupby("chr", sort=True).indices.values():
+        i, j = np.triu_indices(len(rows), k=1)
+        i, j = rows[i], rows[j]
+        keep = ends[i] < starts[j]
+        left.append(i[keep].astype(np.int32))
+        right.append(j[keep].astype(np.int32))
+
+    return np.concatenate(left), np.concatenate(right)
+
+
+def n2_negatives(c_loops: pd.DataFrame, neg_pos_ratio: float, random_state: int,
+                 cond: str) -> pd.DataFrame:
+    """Condition C's n2 negatives: random new pairs of C's own anchors (see module docstring)."""
+    anchors = condition_anchors(c_loops)
+    left, right = candidate_anchor_pairs(anchors)
+
+    # Pairs are keyed as left * n + right; drop the ones that are one of C's loops.
+    n = len(anchors)
+    anchor_index = pd.MultiIndex.from_frame(anchors)
+    pos_left = anchor_index.get_indexer(pd.MultiIndex.from_frame(c_loops[["chr", "x1", "x2"]]))
+    pos_right = anchor_index.get_indexer(pd.MultiIndex.from_frame(c_loops[["chr", "y1", "y2"]]))
+    is_loop = np.isin(left.astype(np.int64) * n + right,
+                      pos_left.astype(np.int64) * n + pos_right)
+    left, right = left[~is_loop], right[~is_loop]
+
+    # Uniform draw without replacement: pandas DataFrame.sample(random_state=int)
+    # draws exactly this way (legacy RandomState.choice).
+    n_draw = int(neg_pos_ratio * len(c_loops))
+    if n_draw > len(left):
+        raise ValueError(f"{cond}: {n_draw} n2 negatives requested but only {len(left)} anchor pairs exist")
+    drawn = np.sort(np.random.RandomState(random_state).choice(len(left), size=n_draw, replace=False))
+    left, right = left[drawn], right[drawn]
+
+    negatives = pd.DataFrame({
+        "chr": anchors["chr"].to_numpy()[left],
+        "x1": anchors["start"].to_numpy()[left], "x2": anchors["end"].to_numpy()[left],
+        "y1": anchors["start"].to_numpy()[right], "y2": anchors["end"].to_numpy()[right],
+    })
+    negatives["loop_id"] = [f"tmp{i}" for i in range(len(negatives))]
+    overlapping = negatives["loop_id"].isin(loops_overlapping_condition(negatives, c_loops))
+    negatives = negatives.loc[~overlapping].drop(columns="loop_id").reset_index(drop=True)
+
+    logger.info(f"  {cond}: {n} distinct anchors -> {len(is_loop)} non-overlapping pairs, "
+                f"{int(is_loop.sum())} of them real loops (dropped) -> drew {n_draw} "
+                f"(ratio {neg_pos_ratio}) -> {int(overlapping.sum())} overlap a {cond} loop "
+                f"rectangle (dropped) -> {len(negatives)} negatives")
+
+    return negatives
+
+
+def add_n2_negatives(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame],
+                     neg_pos_ratio: float, random_state: int) -> pd.DataFrame:
+    """Label each real loop for its own condition only and append every condition's n2 negatives."""
+    for cond in CONDITIONS:
+        loops[f"label_{cond}"] = np.where(loops["source"] == cond, 1.0, np.nan)
+
+    blocks = [loops]
+    for cond in CONDITIONS:
+        negatives = n2_negatives(per_cond[cond], neg_pos_ratio, random_state, cond)
+        negatives["source"] = f"n2_{cond}"
+        for c in CONDITIONS:
+            negatives[f"label_{c}"] = 0.0 if c == cond else np.nan
+        blocks.append(negatives)
+
+    # Real loops keep their ids (the same as in mode other_conditions); negatives continue the numbering.
+    n_real = len(loops)
+    loops = pd.concat(blocks, ignore_index=True)
+    loops.loc[n_real:, "loop_id"] = [f"L{i}" for i in range(n_real + 1, len(loops) + 1)]
+
+    for cond in CONDITIONS:
+        n_pos, n_neg = int((loops[f"label_{cond}"] == 1).sum()), int((loops[f"label_{cond}"] == 0).sum())
+        logger.info(f"  {cond}: {n_pos} positives, {n_neg} n2 negatives | "
+                    f"{100 * n_pos / (n_pos + n_neg):.1f}% positive")
+
+    return loops
+
+
+def build_loop_sets(raw_dir: Path, negatives: str = "other_conditions",
+                    neg_pos_ratio: float = 5, random_state: int = 42) -> pd.DataFrame:
     """Pool the three conditions' native loops and label each per condition."""
     per_cond = {c: read_loop_bed(raw_dir / f"{c}_loop.bed.gz") for c in CONDITIONS}
 
@@ -164,7 +280,11 @@ def build_loop_sets(raw_dir: Path) -> pd.DataFrame:
     loops.insert(0, "loop_id", [f"L{i}" for i in range(1, len(loops) + 1)])
     logger.info(f"Native loops pooled across conditions (no merging): {len(loops)}")
 
-    loops = assign_labels(loops, per_cond)
+    logger.info(f"Negatives: {negatives}")
+    if negatives == "n2":
+        loops = add_n2_negatives(loops, per_cond, neg_pos_ratio, random_state)
+    else:
+        loops = assign_labels(loops, per_cond)
 
     loops = loops.rename(columns={"chr": "chr1"})
     loops.insert(4, "chr2", loops["chr1"])
@@ -175,14 +295,18 @@ def build_loop_sets(raw_dir: Path) -> pd.DataFrame:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build per-condition human loop sets (positives + disjoint-rectangle negatives).")
+    parser = argparse.ArgumentParser(description="Build per-condition human loop sets (positives + negatives).")
     parser.add_argument("--raw_dir", type=Path, default=Path("data/human_prototype/raw"))
-    parser.add_argument("--output", type=Path, default=Path("data/human_prototype/interim/loop_universe.tsv"))
-    parser.add_argument("--log_path", type=Path, default=Path("logs/human_prototype/build_loop_universe.log"))
+    parser.add_argument("--negatives", default="other_conditions", choices=NEGATIVE_MODES)
+    parser.add_argument("--neg_pos_ratio", type=float, default=5,
+                        help="n2 only: negatives drawn per positive (before the rectangle-overlap filter).")
+    parser.add_argument("--random_state", type=int, default=42, help="n2 only: seed of the negative draw.")
+    parser.add_argument("--output", type=Path, default=Path("data/human_prototype/interim/other_conditions/loop_universe.tsv"))
+    parser.add_argument("--log_path", type=Path, default=Path("logs/human_prototype/other_conditions/build_loop_universe.log"))
     args = parser.parse_args()
 
     configure_logging(args.log_path)
-    loops = build_loop_sets(args.raw_dir)
+    loops = build_loop_sets(args.raw_dir, args.negatives, args.neg_pos_ratio, args.random_state)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     loops.to_csv(args.output, sep="\t", index=False)

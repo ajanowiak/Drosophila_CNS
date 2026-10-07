@@ -99,23 +99,30 @@ rule download_genome:
 # consumes it as an existing input (Snakemake errors clearly if it is absent).
 
 
-# Per-condition Rahman loop sets (positives + clean negatives), one table with a
-# label column per condition; built once.
+# Per-condition Rahman loop sets (positives + negatives drawn by the {negatives}
+# mode), one table with a label column per condition; built once per mode.
 rule build_loop_universe:
     input:
         fetal=f"{config['raw_dir']}/fetal_loop.bed.gz",
         glia=f"{config['raw_dir']}/glia_loop.bed.gz",
         neuron=f"{config['raw_dir']}/neuron_loop.bed.gz",
     output:
-        "data/human_prototype/interim/loop_universe.tsv"
+        "data/human_prototype/interim/{negatives}/loop_universe.tsv"
+    params:
+        # Only n2 draws at random, so only n2 reruns when these change.
+        n2_args=lambda wildcards: (
+            f"--neg_pos_ratio {config['neg_pos_ratio']} --random_state {config['random_state']}"
+            if wildcards.negatives == "n2" else ""
+        ),
     log:
-        "logs/human_prototype/build_loop_universe.log"
+        "logs/human_prototype/{negatives}/build_loop_universe.log"
     conda:
         "../../../env/human_prep.yaml"
     shell:
         """
         PYTHONPATH=src/py python src/py/human_prepare_data/build_loop_universe.py \
             --raw_dir {config[raw_dir]} \
+            --negatives {wildcards.negatives} {params.n2_args} \
             --output {output} \
             --log_path {log}
         """
@@ -180,12 +187,12 @@ rule compute_chromvar:
 rule anchor_openness:
     input:
         snap=config["snap"],
-        loops="data/human_prototype/interim/loop_universe.tsv",
+        loops="data/human_prototype/interim/{negatives}/loop_universe.tsv",
         metadata="data/human_prototype/interim/cell_metadata.tsv",
     output:
-        "data/human_prototype/interim/loops_activity_{cell_set}.tsv"
+        "data/human_prototype/interim/{negatives}/loops_activity_{cell_set}.tsv"
     log:
-        "logs/human_prototype/anchor_openness/{cell_set}.log"
+        "logs/human_prototype/{negatives}/anchor_openness/{cell_set}.log"
     conda:
         "../../../env/human_prep.yaml"
     shell:
@@ -203,17 +210,17 @@ rule anchor_openness:
 # Motif enrichment + per-condition loop-presence vectors, per ATAC cell set.
 rule run_stage0:
     input:
-        loops="data/human_prototype/interim/loops_activity_{cell_set}.tsv",
+        loops="data/human_prototype/interim/{negatives}/loops_activity_{cell_set}.tsv",
         motifs="data/human_prototype/interim/motifs_chromvar_all.tsv",
-        loop_table="data/human_prototype/interim/loop_universe.tsv",
+        loop_table="data/human_prototype/interim/{negatives}/loop_universe.tsv",
     output:
-        enrichment="results/human_prototype/prepare_data/{cell_set}/motif_enrichment.csv",
-        count11="results/human_prototype/prepare_data/{cell_set}/count11.csv",
-        n_cells="results/human_prototype/prepare_data/{cell_set}/n_cells.txt",
-        y=expand("results/human_prototype/prepare_data/{{cell_set}}/y_{cond}.csv",
+        enrichment="results/human_prototype/{negatives}/prepare_data/{cell_set}/motif_enrichment.csv",
+        count11="results/human_prototype/{negatives}/prepare_data/{cell_set}/count11.csv",
+        n_cells="results/human_prototype/{negatives}/prepare_data/{cell_set}/n_cells.txt",
+        y=expand("results/human_prototype/{{negatives}}/prepare_data/{{cell_set}}/y_{cond}.csv",
                  cond=config["conditions"]),
     log:
-        "logs/human_prototype/stage0/{cell_set}.log"
+        "logs/human_prototype/{negatives}/stage0/{cell_set}.log"
     conda:
         "../../../env/human_prep.yaml"
     shell:
@@ -222,6 +229,6 @@ rule run_stage0:
             --loops {input.loops} \
             --motifs {input.motifs} \
             --loop_table {input.loop_table} \
-            --output_dir results/human_prototype/prepare_data/{wildcards.cell_set} \
+            --output_dir results/human_prototype/{wildcards.negatives}/prepare_data/{wildcards.cell_set} \
             --log_path {log}
         """
