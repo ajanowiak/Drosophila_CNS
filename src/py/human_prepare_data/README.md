@@ -24,7 +24,7 @@ on the config key `negatives` (see `build_loop_universe.py`):
 - `other_conditions` - the other conditions' loops whose Hi-C rectangle coincides
   with NO actual loop of this condition (the two anchors are never paired
   together here);
-- `n2` - Cupriak's `new_pairs_of_anchors`: random new pairs of this condition's
+- `n2` - `new_pairs_of_anchors`: random new pairs of this condition's
   own anchors, `neg_pos_ratio` per positive, drawn with `random_state`.
 
 Everything from the loop universe on is written under
@@ -62,7 +62,7 @@ define anchor openness. Parameters, sample and paths live in
   Mode `n2`: every non-overlapping same-chromosome pair of the condition's own
   anchors is a candidate; real loops are removed, `int(neg_pos_ratio * #loops)`
   are drawn uniformly (seeded), and drawn pairs whose rectangle overlaps a real
-  loop are dropped (same `pairToPair` test) - in Cupriak's order. Each n2
+  loop are dropped (same `pairToPair` test) - in the same order as the [original repo](https://github.com/ola-cupriak/predicting-the-formation-of-chromatin-loops-using-genomic-data). Each n2
   negative is labelled for its own condition only (`source` = `n2_<condition>`).
 - `snap_io.py` - readers for the `.snap` HDF5 (barcodes, cell x peak + peaks,
   cell x gene, per-cell fragments).

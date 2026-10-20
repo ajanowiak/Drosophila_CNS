@@ -8,7 +8,7 @@ CONDITIONS = ["fetal", "glia", "neuron"]
 # How a condition's negative loops are drawn (see build_loop_universe.py):
 #   other_conditions - the other conditions' loops whose Hi-C rectangle coincides
 #                      with no real loop of this condition (disjoint rectangles);
-#   n2               - Cupriak's "new_pairs_of_anchors": random re-pairing of this
+#   n2               - Originally called "new_pairs_of_anchors": random re-pairing of this
 #                      condition's own loop anchors.
 NEGATIVE_MODES = ["other_conditions", "n2"]
 

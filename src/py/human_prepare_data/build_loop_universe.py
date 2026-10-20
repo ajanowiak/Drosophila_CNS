@@ -10,7 +10,14 @@ negatives (label 0) are drawn is chosen with --negatives:
 
   other_conditions = the OTHER conditions' loops whose Hi-C rectangle does not
                      coincide with ANY actual C loop rectangle
-  n2               = new pairs of C's own anchors (Cupriak's "new_pairs_of_anchors")
+  n2               = new pairs of C's own anchors (aka "new_pairs_of_anchors")
+
+Functions by mode:
+  both modes        read_loop_bed, loops_overlapping_condition (+ _loops_to_bedpe),
+                    build_loop_sets (dispatches on --negatives)
+  other_conditions  label_other_conditions
+  n2                label_n2 -> draw_n2_negatives -> condition_anchors,
+                    candidate_anchor_pairs
 
 Mode other_conditions: disjoint-rectangles criterion (pairwise, against real loops)
 ------------------------------------------------------------
@@ -18,40 +25,35 @@ A loop is a rectangle on the Hi-C plane: [x1, x2] x [y1, y2], the left anchor on
 one axis and the right anchor on the other. Two axis-aligned rectangles overlap
 iff they overlap on BOTH axes (both anchors overlap). The three conditions share
 almost all of their anchors -- what differs is how those anchors are PAIRED into
-loops -- so overlap must be tested against each condition's actual loops, not
-against the union of its anchor territory (a candidate can hit two different C
-anchors that are never paired in C).
+loops.
 
 Hence, per condition C:
   - an other-condition loop is EXCLUDED (label NaN) when its rectangle overlaps at
     least one real C loop rectangle: both its anchors overlap the two anchors of
-    one and the same C loop, i.e. it reproduces an existing C pairing and must not
-    be trained against as a C negative;
+    one and the same C loop
   - otherwise it is a clean NEGATIVE (label 0): its anchors may individually recur
     in C, but that specific pairing is absent from C.
 
 Mode n2: random re-pairing of the condition's own anchors
 --------------------------------------------------------
-A port of new_pairs_of_anchors (negative type n2) from Cupriak's repository
-(github.com/ola-cupriak/predicting-the-formation-of-chromatin-loops-using-genomic-data,
-pipelines/data_preprocessing/nodes.py), per condition C:
+A port of new_pairs_of_anchors (negative type n2) from this repository:
+github.com/ola-cupriak/predicting-the-formation-of-chromatin-loops-using-genomic-data,
+pipelines/data_preprocessing/nodes.py. 
+
+For each condition C:
   1. pool the left and right anchors of C's loops into one set of distinct anchors;
   2. pair every two anchors on the same chromosome whose intervals do not
-     overlap (left end < right start), the left anchor first;
+     overlap
   3. drop the pairs that are exactly one of C's loops;
   4. draw int(neg_pos_ratio * #C loops) of the remaining pairs, uniformly
      without replacement (seeded);
   5. drop the drawn pairs whose rectangle overlaps a real C loop rectangle (the
-     same test as above). Cupriak applies this filter after the draw, so the
-     final ratio ends slightly below neg_pos_ratio.
+     same test as above). In the original repo, this filter is applied after the draw, 
+     so the final ratio ends slightly below neg_pos_ratio.
+
 Anchors keep their native Rahman intervals. Every real loop is a positive of its
 own condition only, and each condition's n2 pairs are negatives of that condition
 only (label NaN elsewhere): in this mode no loop of another condition is a negative.
-
-All three condition sets are emitted as one table of native loops (no coordinate
-merging) with one label column per condition. Downstream (anchor openness, motif
-enrichment, training) reads label_<C> for condition C and drops the excluded
-(NaN) rows.
 
 Inputs:
   - data/human_prototype/raw/{fetal,glia,neuron}_loop.bed.gz
@@ -142,6 +144,9 @@ def loops_overlapping_condition(candidates: pd.DataFrame, c_loops: pd.DataFrame)
 
     A candidate appears in the output iff it reproduces some real C pairing; those
     ids are excluded as C negatives.
+
+    Used by both modes: other_conditions excludes these candidates, n2 drops these
+    drawn pairs.
     """
     a = _loops_to_bedpe(candidates, include_id=True)
     b = _loops_to_bedpe(c_loops, include_id=False)
@@ -154,8 +159,8 @@ def loops_overlapping_condition(candidates: pd.DataFrame, c_loops: pd.DataFrame)
     return set(matched.unique())
 
 
-def assign_labels(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """Add a label_<C> column (1 positive / 0 negative / NaN excluded) per condition."""
+def label_other_conditions(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Mode other_conditions: add a label_<C> column (1 positive / 0 negative / NaN excluded) per condition."""
     for cond in CONDITIONS:
         is_source = loops["source"] == cond
         others = loops.loc[~is_source]
@@ -177,7 +182,7 @@ def assign_labels(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame]) -> pd.
 
 
 def condition_anchors(c_loops: pd.DataFrame) -> pd.DataFrame:
-    """C's distinct anchors (left and right pooled), sorted by (chr, start, end)."""
+    """Mode n2 helper: C's distinct anchors (left and right pooled), sorted by (chr, start, end)."""
     sides = [c_loops[["chr", s, e]].set_axis(["chr", "start", "end"], axis=1)
              for s, e in (("x1", "x2"), ("y1", "y2"))]
     return (pd.concat(sides).drop_duplicates()
@@ -185,7 +190,7 @@ def condition_anchors(c_loops: pd.DataFrame) -> pd.DataFrame:
 
 
 def candidate_anchor_pairs(anchors: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-    """(left, right) row indices into `anchors` of every non-overlapping same-chromosome pair.
+    """Mode n2 helper: (left, right) row indices into `anchors` of every non-overlapping same-chromosome pair.
 
     Each unordered pair appears once: anchors are sorted by start, so the earlier
     row is the left anchor, and the pair is kept iff left end < right start
@@ -204,9 +209,9 @@ def candidate_anchor_pairs(anchors: pd.DataFrame) -> tuple[np.ndarray, np.ndarra
     return np.concatenate(left), np.concatenate(right)
 
 
-def n2_negatives(c_loops: pd.DataFrame, neg_pos_ratio: float, random_state: int,
-                 cond: str) -> pd.DataFrame:
-    """Condition C's n2 negatives: random new pairs of C's own anchors (see module docstring)."""
+def draw_n2_negatives(c_loops: pd.DataFrame, neg_pos_ratio: float, random_state: int,
+                      cond: str) -> pd.DataFrame:
+    """Mode n2: draw condition C's negatives as random new pairs of C's own anchors (see module docstring)."""
     anchors = condition_anchors(c_loops)
     left, right = candidate_anchor_pairs(anchors)
 
@@ -244,15 +249,15 @@ def n2_negatives(c_loops: pd.DataFrame, neg_pos_ratio: float, random_state: int,
     return negatives
 
 
-def add_n2_negatives(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame],
-                     neg_pos_ratio: float, random_state: int) -> pd.DataFrame:
-    """Label each real loop for its own condition only and append every condition's n2 negatives."""
+def label_n2(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame],
+             neg_pos_ratio: float, random_state: int) -> pd.DataFrame:
+    """Mode n2: label each real loop for its own condition only and append every condition's n2 negatives."""
     for cond in CONDITIONS:
         loops[f"label_{cond}"] = np.where(loops["source"] == cond, 1.0, np.nan)
 
     blocks = [loops]
     for cond in CONDITIONS:
-        negatives = n2_negatives(per_cond[cond], neg_pos_ratio, random_state, cond)
+        negatives = draw_n2_negatives(per_cond[cond], neg_pos_ratio, random_state, cond)
         negatives["source"] = f"n2_{cond}"
         for c in CONDITIONS:
             negatives[f"label_{c}"] = 0.0 if c == cond else np.nan
@@ -273,7 +278,7 @@ def add_n2_negatives(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame],
 
 def build_loop_sets(raw_dir: Path, negatives: str = "other_conditions",
                     neg_pos_ratio: float = 5, random_state: int = 42) -> pd.DataFrame:
-    """Pool the three conditions' native loops and label each per condition."""
+    """Pool the three conditions' native loops and label each per condition with the chosen negatives mode."""
     per_cond = {c: read_loop_bed(raw_dir / f"{c}_loop.bed.gz") for c in CONDITIONS}
 
     loops = pd.concat([df.assign(source=c) for c, df in per_cond.items()], ignore_index=True)
@@ -282,9 +287,9 @@ def build_loop_sets(raw_dir: Path, negatives: str = "other_conditions",
 
     logger.info(f"Negatives: {negatives}")
     if negatives == "n2":
-        loops = add_n2_negatives(loops, per_cond, neg_pos_ratio, random_state)
+        loops = label_n2(loops, per_cond, neg_pos_ratio, random_state)
     else:
-        loops = assign_labels(loops, per_cond)
+        loops = label_other_conditions(loops, per_cond)
 
     loops = loops.rename(columns={"chr": "chr1"})
     loops.insert(4, "chr2", loops["chr1"])
