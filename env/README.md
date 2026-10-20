@@ -6,8 +6,8 @@ The `env/` directory contains conda environments.
   model). All four stages fit models and/or plot results, so they share one
   environment.
 - `human_prep.yaml` - the human-brain prototype (`src/snakemake/human_prototype`):
-  reading the `.snap` HDF5, loop-anchor overlap (`pybedtools` for the loop universe,
-  `pyranges` for anchor openness), and the reused Stage 0/1 math.
+  reading the `.snap` HDF5, interval overlaps (`pybedtools` for the loop universe
+  and anchor openness), and the reused Stage 0/1 math.
 - `human_prep_r.yaml` - the chromVAR step (`src/R/human_prepare_data/compute_chromvar.R`):
   Bioconductor `chromVAR` / `motifmatchr` / `TFBSTools`, with `rhdf5` to read the
   `.snap` and `Rsamtools` to read hg38.
