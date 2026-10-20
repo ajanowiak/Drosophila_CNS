@@ -26,28 +26,39 @@ raw_dir: "data/human_prototype/raw"
 jaspar: "data/human_prototype/ref/JASPAR2026_CORE_vertebrates.jaspar"
 jaspar_url: "https://jaspar.elixir.no/download/data/2026/CORE/JASPAR2026_CORE_vertebrates_non-redundant_pfms_jaspar.txt"
 
-# 3 ATAC cell sets x 3 loop-presence labels = 9 classifiers.
-cell_sets:
-  - "neuron"
-  - "non_neuron"
-  - "all"
-
 conditions:
   - "fetal"
   - "glia"
   - "neuron"
 
-# How each condition's negative loops are drawn; every step from the loop universe
-# on writes under data/human_prototype/interim/<negatives>/ and
-# results/human_prototype/<negatives>/, so the two modes never overwrite each other.
+# How each condition's negative loops are drawn; every listed mode is run. Every
+# step from the loop universe on writes under data/human_prototype/interim/<negatives>/
+# and results/human_prototype/<negatives>/, so the two modes never overwrite each other.
+# A single mode can be run with `--config negatives=n2`.
 #   other_conditions - the other conditions' loops whose Hi-C rectangle coincides with
 #                      no real loop of the condition (pairToPair -type both); parameter-free.
 #   n2               - Cupriak's new_pairs_of_anchors: random new pairs of the condition's
 #                      own anchors, neg_pos_ratio per positive (minus the few that overlap
 #                      a real loop rectangle), drawn with random_state.
-negatives: "other_conditions"
+negatives:
+  - "other_conditions"
+  - "n2"
 neg_pos_ratio: 5          # n2 only (Cupriak's human_neg_pos_ratio)
 random_state: 42          # n2 only (Cupriak's random_state)
+
+# Stage 0 feature sets; every listed set is built and trained for every negative mode.
+# Each maps to the cell partition its enrichment is computed within:
+#   null                  - no partition: "1-1" vs all other analysis cells, one feature
+#                           per motif;
+#   {partition, column}   - a TSV with a barcode column that assigns every analysis cell
+#                           (QC-passing, atlas-annotated) to exactly one group in `column`;
+#                           "1-1" vs "other" is computed within each group's cells and the
+#                           groups are stacked, one feature per motif x group.
+feature_sets:
+  motif: null
+  motif_x_cellclass:
+    partition: "data/human_prototype/interim/cell_metadata.tsv"
+    column: "cellclass"
 
 min_fragments: 1000       # unique-fragment QC threshold
 min_cells_per_peak: 1    # keep every accessible peak (chromVAR default; filterPeaks drops the rest)

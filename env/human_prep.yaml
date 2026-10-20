@@ -13,9 +13,8 @@ dependencies:
   - h5py
   - anndata
   - pysam
-  - pyranges          # anchor_openness fragment/anchor overlap
-  - bedtools          # backs pybedtools (build_loop_universe)
-  - pybedtools        # build_loop_universe anchor-overlap fractions
+  - bedtools          # backs pybedtools
+  - pybedtools        # build_loop_universe loop overlaps, anchor_openness fragment/anchor overlap
   - scikit-learn
   - matplotlib
   - tqdm

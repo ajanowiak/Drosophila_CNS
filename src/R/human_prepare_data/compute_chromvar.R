@@ -1,7 +1,8 @@
 #!/usr/bin/env Rscript
 
 # Compute a motif x cell chromVAR deviation matrix (Schep et al. 2017) for the
-# selected nuclei. Reads the SnapATAC .snap peak matrix, keeps the chosen cells and
+# analysis nuclei (QC-passing and atlas-annotated, the `in_analysis` column of the
+# cell metadata). Reads the SnapATAC .snap peak matrix, keeps those cells and
 # accessible main-chromosome peaks, scores JASPAR CORE vertebrate motifs, and writes
 # the deviation Z-scores as a motif x cell TSV.
 
@@ -23,11 +24,7 @@ opt <- parse_args(OptionParser(option_list = list(
               help = "SnapATAC .snap HDF5 (GSE244618 processed data)."),
   make_option("--metadata", type = "character",
               default = "data/human_prototype/interim/cell_metadata.tsv",
-              help = "Per-nucleus QC + atlas labels."),
-  make_option("--cell_label", type = "character", default = "all",
-              help = "Value to keep in --label_column, or 'all' for every QC nucleus."),
-  make_option("--label_column", type = "character", default = "label",
-              help = "Metadata column matched against --cell_label."),
+              help = "Per-nucleus QC + atlas labels, with the in_analysis flag."),
   make_option("--genome", type = "character",
               default = "data/human_prototype/ref/hg38.fa",
               help = "hg38 FASTA; a .fai index must sit next to it."),
@@ -42,7 +39,7 @@ opt <- parse_args(OptionParser(option_list = list(
   make_option("--threads", type = "integer", default = 1L,
               help = "BiocParallel workers; >1 raises memory use."),
   make_option("--output", type = "character",
-              default = "data/human_prototype/interim/motifs_chromvar_all.tsv"),
+              default = "data/human_prototype/interim/motifs_chromvar.tsv"),
   make_option("--log_path", type = "character",
               default = "logs/human_prototype/compute_chromvar.log")
 )))
@@ -83,11 +80,9 @@ logmsg(sprintf("Read .snap: %d cells x %d peaks",
 
 meta <- read.table(opt$metadata, header = TRUE, sep = "\t",
                    stringsAsFactors = FALSE, quote = "")
-meta$pass_qc <- as.logical(meta$pass_qc)
-keep <- meta$pass_qc
-if (opt$cell_label != "all") keep <- keep & meta[[opt$label_column]] == opt$cell_label
-keep_barcodes <- meta$barcode[keep]
-logmsg(sprintf("Target %s=%s cells: %d", opt$label_column, opt$cell_label, length(keep_barcodes)))
+meta$in_analysis <- as.logical(meta$in_analysis)
+keep_barcodes <- meta$barcode[meta$in_analysis]
+logmsg(sprintf("Analysis cells (QC-passing, atlas-annotated): %d", length(keep_barcodes)))
 
 cell_mask <- snap$barcodes %in% keep_barcodes
 counts <- snap$counts[cell_mask, , drop = FALSE]

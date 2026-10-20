@@ -6,10 +6,12 @@ Attach the published Li et al. 2023 atlas annotation to the SNAP nuclei.
 Every nucleus is labelled from the atlas's per-nucleus metatable (Table S3,
 `hba.whole.final.meta.txt`) by joining on (sample, barcode): its coarse class
 (GLUT / GABA / NonN), its subclass (one of the 42), and its cell type (one of
-the 107). The coarse `label` column collapses these to neuron / non_neuron for
-the cell-set interface; the atlas columns are kept for finer subsets. Nuclei
-absent from the atlas (dropped by the atlas's own QC / doublet removal) are
-labelled `unannotated`.
+the 107). Nuclei absent from the atlas (dropped by the atlas's own QC /
+doublet removal) are labelled `unannotated`, with `annotated` = False.
+
+The `in_analysis` column (passes QC and is annotated) defines the analysis
+cells: chromVAR, anchor openness and Stage 0 all use exactly these nuclei, so
+every cell can be assigned to a group of an atlas-based cell partition.
 
 Inputs:
   - a GSE244618 .snap file
@@ -26,7 +28,7 @@ import h5py
 import pandas as pd
 
 from core.log import configure_logging
-from human_prepare_data.constants import ATLAS_COLUMNS, NEURONAL_CLASSES, NON_NEURONAL_CLASS
+from human_prepare_data.constants import ATLAS_COLUMNS, UNANNOTATED
 from human_prepare_data.snap_io import load_barcodes, load_fragment_counts
 
 logger = logging.getLogger(__name__)
@@ -44,8 +46,16 @@ def load_atlas_annotation(annotation_path: Path, sample: str) -> pd.DataFrame:
     return rows.set_index("barcode")
 
 
+def log_dropped_unannotated(meta: pd.DataFrame) -> None:
+    """Log how many QC-passing nuclei are left out of the analysis for lacking an atlas label."""
+    n_qc = int(meta["pass_qc"].sum())
+    n_dropped = int((meta["pass_qc"] & ~meta["annotated"]).sum())
+    logger.info(f"Dropping {n_dropped} unannotated QC nuclei ({100 * n_dropped / n_qc:.1f}% of "
+                f"{n_qc} QC-passing nuclei); {n_qc - n_dropped} analysis cells remain")
+
+
 def annotate(snap_path: Path, annotation_path: Path, sample: str, min_fragments: int) -> pd.DataFrame:
-    """Return per-nucleus QC flag and atlas class / subclass / cell-type labels, in snap order."""
+    """Return per-nucleus QC / annotation / analysis flags and atlas labels, in snap order."""
     with h5py.File(snap_path, "r") as f:
         barcodes = load_barcodes(f)
         frag_counts = load_fragment_counts(f)
@@ -56,19 +66,18 @@ def annotate(snap_path: Path, annotation_path: Path, sample: str, min_fragments:
     meta["pass_qc"] = meta["n_fragments"] >= min_fragments
 
     # Join the atlas columns onto our nuclei; anything unmatched is "unannotated".
+    meta["annotated"] = meta["barcode"].isin(atlas.index)
     for col in ("cellclass", "subclass", "celltype"):
-        meta[col] = meta["barcode"].map(atlas[col]).fillna("unannotated")
+        meta[col] = meta["barcode"].map(atlas[col]).fillna(UNANNOTATED)
 
-    # Collapse the atlas coarse class into the two cell-set labels.
-    class_to_label = {cls: "neuron" for cls in NEURONAL_CLASSES}
-    class_to_label[NON_NEURONAL_CLASS] = "non_neuron"
-    meta["label"] = meta["cellclass"].map(class_to_label).fillna("unannotated")
+    # Analysis cells: QC-passing nuclei that carry an atlas label.
+    meta["in_analysis"] = meta["pass_qc"] & meta["annotated"]
 
-    n_annotated = int((meta["cellclass"] != "unannotated").sum())
     logger.info(f"QC: {int(meta['pass_qc'].sum())} / {len(meta)} nuclei pass >= {min_fragments} unique fragments")
-    logger.info(f"Atlas match: {n_annotated} / {len(meta)} snap nuclei annotated")
-    logger.info(f"cellclass among QC nuclei: {meta.loc[meta['pass_qc'], 'cellclass'].value_counts().to_dict()}")
-    logger.info(f"subclass among QC nuclei: {meta.loc[meta['pass_qc'], 'subclass'].value_counts().to_dict()}")
+    logger.info(f"Atlas match: {int(meta['annotated'].sum())} / {len(meta)} snap nuclei annotated")
+    log_dropped_unannotated(meta)
+    logger.info(f"cellclass among analysis cells: {meta.loc[meta['in_analysis'], 'cellclass'].value_counts().to_dict()}")
+    logger.info(f"subclass among analysis cells: {meta.loc[meta['in_analysis'], 'subclass'].value_counts().to_dict()}")
     return meta
 
 

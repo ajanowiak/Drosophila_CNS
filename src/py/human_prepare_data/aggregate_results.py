@@ -1,14 +1,16 @@
 # human_prepare_data/aggregate_results.py
 
 """
-Collate the per-cell-set Stage 1 summaries into one table of the nine
-(ATAC cell set x loop-presence label) classifiers, and run the loop-count
-checkpoint: every cell set must train on the SAME loop set for a given label.
+Collate the Stage 1 summaries of every (negative mode x feature set) run into
+one table, so the ROC-AUC of e.g. pooled motif features and motif x cell-group
+features can be compared under both negative modes, and run the loop-count
+checkpoint: within one negative mode, every feature set must train on the SAME
+loop set for a given condition.
 
 Inputs:
-  - results/human_prototype/train/<cell_set>/cv_summary.csv  (one per cell set)
+  - results/human_prototype/<negatives>/train/<feature_set>/cv_summary.csv
 Outputs:
-  - results/human_prototype/train/all_cellsets_summary.csv
+  - results/human_prototype/train_summary.csv
 """
 
 import argparse
@@ -18,54 +20,59 @@ from pathlib import Path
 import pandas as pd
 
 from core.log import configure_logging
-from human_prepare_data.constants import CELL_SETS
+from human_prepare_data.constants import NAN_TOLERANT_MODELS
 
 logger = logging.getLogger(__name__)
 
 
 def check_equal_loop_counts(summary: pd.DataFrame) -> None:
-    """Checkpoint: for each loop-presence label, every cell set trained on the
-    same number of loops.
+    """Checkpoint: for each (negative mode, condition), every feature set trained on
+    the same number of loops.
 
-    Conditions now have different loop sets (each has its own positives + clean
-    negatives), so loop counts differ ACROSS conditions - but a single
-    condition's loop set is pure loop geometry, independent of the cell set.
-    Cell sets differ only in which cells define the both-open "11" state, and
-    NaN-tolerant XGBoost drops no loop, so within one condition the loop count
-    must be identical across cell sets. A mismatch means loops were silently
-    dropped somewhere and that condition's classifiers are no longer comparable
-    across cell sets.
+    A condition's loop set is pure loop geometry, fixed by the negative mode and
+    independent of the features, and NaN-tolerant XGBoost drops no loop, so the
+    loop count must be identical across feature sets. A mismatch means loops were
+    silently dropped somewhere and the feature sets are no longer comparable.
+    Models that cannot take NaN drop loops with undefined enrichment, which
+    differs between feature sets, so for them a mismatch is only a warning.
     """
-    for cond, grp in summary.groupby("condition"):
-        counts = grp.set_index("cell_set")["n_loops"]
-        if counts.nunique() != 1:
-            raise ValueError(
-                f"Loop-count mismatch across cell sets for label '{cond}': "
-                f"{counts.to_dict()} - cell sets are no longer comparable."
-            )
-    logger.info(f"Checkpoint OK: loop counts equal across cell sets for every label "
-                f"({summary['cell_set'].nunique()} cell sets).")
+    for (negatives, cond), grp in summary.groupby(["negatives", "condition"]):
+        counts = grp.set_index("feature_set")["n_loops"]
+        if counts.nunique() == 1:
+            continue
+
+        message = (f"Loop-count mismatch across feature sets for {negatives} / '{cond}': "
+                   f"{counts.to_dict()} - feature sets are not trained on the same loops.")
+        if set(grp["model"]) <= NAN_TOLERANT_MODELS:
+            raise ValueError(message)
+        logger.warning(message)
+
+    logger.info(f"Loop-count checkpoint done ({summary['feature_set'].nunique()} feature sets, "
+                f"{summary['negatives'].nunique()} negative modes).")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Aggregate the 9 human classifiers into one table.")
-    parser.add_argument("--train_dir", type=Path, default=Path("results/human_prototype/train"))
-    parser.add_argument("--cell_sets", nargs="*", default=CELL_SETS)
-    parser.add_argument("--output", type=Path, default=Path("results/human_prototype/train/all_cellsets_summary.csv"))
+    parser = argparse.ArgumentParser(description="Aggregate the human classifiers across negative modes and feature sets.")
+    parser.add_argument("--results_dir", type=Path, default=Path("results/human_prototype"))
+    parser.add_argument("--negatives", nargs="+", required=True)
+    parser.add_argument("--feature_sets", nargs="+", required=True)
+    parser.add_argument("--output", type=Path, default=Path("results/human_prototype/train_summary.csv"))
     parser.add_argument("--log_path", type=Path, default=Path("logs/human_prototype/aggregate.log"))
     args = parser.parse_args()
 
     configure_logging(args.log_path)
 
     rows = []
-    for cell_set in args.cell_sets:
-        path = args.train_dir / cell_set / "cv_summary.csv"
-        if not path.exists():
-            logger.warning(f"missing {path} - skipping")
-            continue
-        df = pd.read_csv(path)
-        df.insert(0, "cell_set", cell_set)
-        rows.append(df)
+    for negatives in args.negatives:
+        for feature_set in args.feature_sets:
+            path = args.results_dir / negatives / "train" / feature_set / "cv_summary.csv"
+            if not path.exists():
+                logger.warning(f"missing {path} - skipping")
+                continue
+            df = pd.read_csv(path)
+            df.insert(0, "feature_set", feature_set)
+            df.insert(0, "negatives", negatives)
+            rows.append(df)
 
     summary = pd.concat(rows, ignore_index=True)
     summary.to_csv(args.output, index=False)
@@ -73,15 +80,14 @@ def main() -> None:
 
     check_equal_loop_counts(summary)
 
-    # ROC-AUC grid: rows are ATAC cell sets, columns are loop-presence labels.
-    pivot = summary.pivot(index="cell_set", columns="condition", values="mean_auc").reindex(args.cell_sets)
-    logger.info(f"ROC-AUC grid (rows = ATAC cell set, cols = loop label):\n{pivot.round(3).to_string()}")
+    # ROC-AUC grid: rows are (negative mode, feature set), columns are loop-presence labels.
+    pivot = summary.pivot_table(index=["negatives", "feature_set"], columns="condition", values="mean_auc")
+    logger.info(f"ROC-AUC grid (rows = negative mode x feature set, cols = loop label):\n"
+                f"{pivot.round(3).to_string()}")
 
-    print("\nROC-AUC (rows = ATAC cell set, cols = loop-presence label):")
-    print(pivot.round(3).to_string())
-    best_cell_set = summary.loc[summary.mean_auc.idxmax(), "cell_set"]
-    best_condition = summary.loc[summary.mean_auc.idxmax(), "condition"]
-    print(f"\nBest: {best_cell_set} x {best_condition} = {summary.mean_auc.max():.3f}")
+    best = summary.loc[summary["mean_auc"].idxmax()]
+    logger.info(f"Best: {best['negatives']} x {best['feature_set']} x {best['condition']} "
+                f"= {best['mean_auc']:.3f}")
 
 
 if __name__ == "__main__":

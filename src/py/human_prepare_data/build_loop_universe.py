@@ -182,7 +182,10 @@ def label_other_conditions(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame
 
 
 def condition_anchors(c_loops: pd.DataFrame) -> pd.DataFrame:
-    """Mode n2 helper: C's distinct anchors (left and right pooled), sorted by (chr, start, end)."""
+    """Mode n2 helper: C's distinct anchors (left and right pooled), sorted by (chr, start, end).
+
+    Also used by anchor_openness.py on all conditions' loops pooled.
+    """
     sides = [c_loops[["chr", s, e]].set_axis(["chr", "start", "end"], axis=1)
              for s, e in (("x1", "x2"), ("y1", "y2"))]
     return (pd.concat(sides).drop_duplicates()

@@ -1,7 +1,8 @@
 # Stage 0 (human) - turn the SNAP + Rahman loop calls into the two matrices the
 # Drosophila enrichment math consumes (a shared chromVAR motif matrix and a
-# per-cell-set loop x cell openness matrix), then the motif-enrichment matrix
-# and per-condition loop-presence vectors.
+# shared anchor x cell openness matrix, from which each loop universe's loop x
+# cell activity codes are built), then one motif-enrichment matrix per
+# (negative mode x feature set) and per-condition loop-presence vectors.
 
 rule all_prepare_data:
     input:
@@ -151,9 +152,10 @@ rule annotate_cells:
         """
 
 
-# chromVAR ONCE on all QC nuclei -> one shared motif x cell feature set. Every
-# cell set reuses this matrix and just selects its own cells at Stage 0, so the
-# same cell is never scored twice under different peak filters / backgrounds.
+# chromVAR ONCE on the analysis nuclei -> one shared motif x cell feature set.
+# Every negative mode and feature set reuses this matrix (a cell group just
+# selects its own cells at Stage 0), so the same cell is never scored twice
+# under different peak filters / backgrounds.
 rule compute_chromvar:
     input:
         snap=config["snap"],
@@ -162,7 +164,7 @@ rule compute_chromvar:
         motifs=config["jaspar"],
         metadata="data/human_prototype/interim/cell_metadata.tsv",
     output:
-        "data/human_prototype/interim/motifs_chromvar_all.tsv"
+        "data/human_prototype/interim/motifs_chromvar.tsv"
     log:
         "logs/human_prototype/compute_chromvar.log"
     conda:
@@ -175,7 +177,6 @@ rule compute_chromvar:
             --metadata {input.metadata} \
             --genome {input.genome} \
             --motifs {input.motifs} \
-            --cell_label all \
             --min_cells_per_peak {config[min_cells_per_peak]} \
             --bg_iterations {config[bg_iterations]} \
             --output {output} \
@@ -183,52 +184,69 @@ rule compute_chromvar:
         """
 
 
-# Loop x cell anchor openness, per ATAC cell set.
+# Anchor x cell openness ONCE, per distinct anchor of the three conditions' real
+# loops; both negative modes' loops pair these same anchors, so Stage 0 builds
+# every loop universe's activity codes from this one matrix.
 rule anchor_openness:
     input:
         snap=config["snap"],
-        loops="data/human_prototype/interim/{negatives}/loop_universe.tsv",
+        loop_beds=expand(f"{config['raw_dir']}/{{condition}}_loop.bed.gz", condition=config["conditions"]),
         metadata="data/human_prototype/interim/cell_metadata.tsv",
     output:
-        "data/human_prototype/interim/{negatives}/loops_activity_{cell_set}.tsv"
+        "data/human_prototype/interim/anchor_openness.tsv"
     log:
-        "logs/human_prototype/{negatives}/anchor_openness/{cell_set}.log"
+        "logs/human_prototype/anchor_openness.log"
     conda:
         "../../../env/human_prep.yaml"
     shell:
         """
         PYTHONPATH=src/py python src/py/human_prepare_data/anchor_openness.py \
             --snap {input.snap} \
-            --loops {input.loops} \
-            --cell_label {wildcards.cell_set} \
+            --loop_beds {input.loop_beds} \
             --metadata {input.metadata} \
             --output {output} \
             --log_path {log}
         """
 
 
-# Motif enrichment + per-condition loop-presence vectors, per ATAC cell set.
+def partition_input(wildcards):
+    """The feature set's cell-partition table, or nothing for pooled motif features."""
+    spec = config["feature_sets"][wildcards.features]
+    return [spec["partition"]] if spec else []
+
+
+def partition_args(wildcards):
+    """Stage 0 CLI arguments selecting the feature set's cell partition."""
+    spec = config["feature_sets"][wildcards.features]
+    return f"--partition {spec['partition']} --group_column {spec['column']}" if spec else ""
+
+
+# Motif enrichment + per-condition loop-presence vectors, per negative mode and
+# feature set.
 rule run_stage0:
     input:
-        loops="data/human_prototype/interim/{negatives}/loops_activity_{cell_set}.tsv",
-        motifs="data/human_prototype/interim/motifs_chromvar_all.tsv",
+        openness="data/human_prototype/interim/anchor_openness.tsv",
+        motifs="data/human_prototype/interim/motifs_chromvar.tsv",
         loop_table="data/human_prototype/interim/{negatives}/loop_universe.tsv",
+        partition=partition_input,
     output:
-        enrichment="results/human_prototype/{negatives}/prepare_data/{cell_set}/motif_enrichment.csv",
-        count11="results/human_prototype/{negatives}/prepare_data/{cell_set}/count11.csv",
-        n_cells="results/human_prototype/{negatives}/prepare_data/{cell_set}/n_cells.txt",
-        y=expand("results/human_prototype/{{negatives}}/prepare_data/{{cell_set}}/y_{cond}.csv",
+        enrichment="results/human_prototype/{negatives}/prepare_data/{features}/motif_enrichment.csv",
+        count11="results/human_prototype/{negatives}/prepare_data/{features}/count11.csv",
+        n_cells="results/human_prototype/{negatives}/prepare_data/{features}/n_cells.tsv",
+        y=expand("results/human_prototype/{{negatives}}/prepare_data/{{features}}/y_{cond}.csv",
                  cond=config["conditions"]),
+    params:
+        partition_args=partition_args,
     log:
-        "logs/human_prototype/{negatives}/stage0/{cell_set}.log"
+        "logs/human_prototype/{negatives}/stage0/{features}.log"
     conda:
         "../../../env/human_prep.yaml"
     shell:
         """
         PYTHONPATH=src/py python src/py/human_prepare_data/run_stage0_human.py \
-            --loops {input.loops} \
+            --anchor_openness {input.openness} \
             --motifs {input.motifs} \
-            --loop_table {input.loop_table} \
-            --output_dir results/human_prototype/{wildcards.negatives}/prepare_data/{wildcards.cell_set} \
+            --loop_table {input.loop_table} {params.partition_args} \
+            --output_dir results/human_prototype/{wildcards.negatives}/prepare_data/{wildcards.features} \
             --log_path {log}
         """
