@@ -45,8 +45,8 @@ For each condition C:
   2. pair every two anchors on the same chromosome whose intervals do not
      overlap
   3. drop the pairs that are exactly one of C's loops;
-  4. draw int(neg_pos_ratio * #C loops) of the remaining pairs, uniformly
-     without replacement (seeded);
+  4. draw int(neg_pos_ratio[C] * #C loops) of the remaining pairs, uniformly
+     without replacement (seeded); the ratio is set per condition;
   5. drop the drawn pairs whose rectangle overlaps a real C loop rectangle (the
      same test as above). In the original repo, this filter is applied after the draw, 
      so the final ratio ends slightly below neg_pos_ratio.
@@ -253,14 +253,17 @@ def draw_n2_negatives(c_loops: pd.DataFrame, neg_pos_ratio: float, random_state:
 
 
 def label_n2(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame],
-             neg_pos_ratio: float, random_state: int) -> pd.DataFrame:
-    """Mode n2: label each real loop for its own condition only and append every condition's n2 negatives."""
+             neg_pos_ratio: dict[str, float], random_state: int) -> pd.DataFrame:
+    """Mode n2: label each real loop for its own condition only and append every condition's n2 negatives.
+
+    neg_pos_ratio maps each condition to its number of negatives drawn per positive.
+    """
     for cond in CONDITIONS:
         loops[f"label_{cond}"] = np.where(loops["source"] == cond, 1.0, np.nan)
 
     blocks = [loops]
     for cond in CONDITIONS:
-        negatives = draw_n2_negatives(per_cond[cond], neg_pos_ratio, random_state, cond)
+        negatives = draw_n2_negatives(per_cond[cond], neg_pos_ratio[cond], random_state, cond)
         negatives["source"] = f"n2_{cond}"
         for c in CONDITIONS:
             negatives[f"label_{c}"] = 0.0 if c == cond else np.nan
@@ -280,8 +283,11 @@ def label_n2(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame],
 
 
 def build_loop_sets(raw_dir: Path, negatives: str = "other_conditions",
-                    neg_pos_ratio: float = 5, random_state: int = 42) -> pd.DataFrame:
-    """Pool the three conditions' native loops and label each per condition with the chosen negatives mode."""
+                    neg_pos_ratio: dict[str, float] | None = None, random_state: int = 42) -> pd.DataFrame:
+    """Pool the three conditions' native loops and label each per condition with the chosen negatives mode.
+
+    neg_pos_ratio (condition -> negatives per positive) is required for n2 and unused otherwise.
+    """
     per_cond = {c: read_loop_bed(raw_dir / f"{c}_loop.bed.gz") for c in CONDITIONS}
 
     loops = pd.concat([df.assign(source=c) for c, df in per_cond.items()], ignore_index=True)
@@ -290,6 +296,8 @@ def build_loop_sets(raw_dir: Path, negatives: str = "other_conditions",
 
     logger.info(f"Negatives: {negatives}")
     if negatives == "n2":
+        if neg_pos_ratio is None:
+            raise ValueError("--negatives n2 needs --neg_pos_ratio for every condition")
         loops = label_n2(loops, per_cond, neg_pos_ratio, random_state)
     else:
         loops = label_other_conditions(loops, per_cond)
@@ -302,19 +310,35 @@ def build_loop_sets(raw_dir: Path, negatives: str = "other_conditions",
                   *(f"label_{c}" for c in CONDITIONS)]]
 
 
+def parse_ratios(values: list[str] | None) -> dict[str, float] | None:
+    """Parse "condition=ratio" arguments into a mapping that covers every condition."""
+    if values is None:
+        return None
+
+    ratios = {}
+    for value in values:
+        cond, _, ratio = value.partition("=")
+        ratios[cond] = float(ratio)
+
+    if set(ratios) != set(CONDITIONS):
+        raise ValueError(f"--neg_pos_ratio needs exactly the conditions {CONDITIONS}, got {sorted(ratios)}")
+    return ratios
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build per-condition human loop sets (positives + negatives).")
     parser.add_argument("--raw_dir", type=Path, default=Path("data/human_prototype/raw"))
     parser.add_argument("--negatives", default="other_conditions", choices=NEGATIVE_MODES)
-    parser.add_argument("--neg_pos_ratio", type=float, default=5,
-                        help="n2 only: negatives drawn per positive (before the rectangle-overlap filter).")
+    parser.add_argument("--neg_pos_ratio", nargs="+", default=None, metavar="CONDITION=RATIO",
+                        help="n2 only: negatives drawn per positive for each condition "
+                             "(before the rectangle-overlap filter), e.g. fetal=1.57 glia=1.51 neuron=1.32.")
     parser.add_argument("--random_state", type=int, default=42, help="n2 only: seed of the negative draw.")
     parser.add_argument("--output", type=Path, default=Path("data/human_prototype/interim/other_conditions/loop_universe.tsv"))
     parser.add_argument("--log_path", type=Path, default=Path("logs/human_prototype/other_conditions/build_loop_universe.log"))
     args = parser.parse_args()
 
     configure_logging(args.log_path)
-    loops = build_loop_sets(args.raw_dir, args.negatives, args.neg_pos_ratio, args.random_state)
+    loops = build_loop_sets(args.raw_dir, args.negatives, parse_ratios(args.neg_pos_ratio), args.random_state)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     loops.to_csv(args.output, sep="\t", index=False)

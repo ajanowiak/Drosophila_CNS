@@ -1,26 +1,26 @@
 # human_prepare_data/run_stage1_human.py
 
 """
-Human Stage 1 driver: condition-specific loop-presence classifier.
+Human Stage 1 driver: one condition's loop-presence classifier.
 
 Reuses the Drosophila CV harness (cross_validate), ROC plotting (plot_roc) and
 the exact time-specific XGBoost hyperparameters. The human glue loads one
 feature set's enrichment matrix (pooled motifs, or motif x cell group) and each
 condition's label vector (its positives + clean negatives), applies the NaN
-policy below, and reports/plots ROC per condition.
+policy below, and reports/plots the ROC. Snakemake runs one job per condition;
+summarize_stage1.py then collects the conditions of one feature set.
 
 Inputs (results/human_prototype/<negatives>/prepare_data/<feature_set>/):
   - motif_enrichment.csv, y_<condition>.csv, n_cells.tsv
 Outputs (results/human_prototype/<negatives>/train/<feature_set>/):
-  - cv_summary.csv, roc_results/<condition>.pkl,
-    figures/roc_<condition>.{png,pdf}, figures/roc_combined.{png,pdf}
+  - cv_<condition>.csv (one summary row), roc_results/<condition>.pkl,
+    figures/roc_<condition>.{png,pdf}
 """
 
 import argparse
 import logging
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.model_selection import KFold
 
@@ -53,7 +53,7 @@ def condition_title(full: str, cond: str, feature_set: str, n_loops: int, featur
 
 
 def run_condition(enrichment: pd.DataFrame, y: pd.Series, model: str, n_splits: int,
-                  n_cells: int) -> tuple[dict, CVResult]:
+                  n_jobs: int, n_cells: int, n_groups: int) -> tuple[dict, CVResult]:
     """Cross-validate one condition and return its summary row and CVResult.
 
     NaN policy: a loop with no both-open "11" cell (within a cell group, for
@@ -82,15 +82,20 @@ def run_condition(enrichment: pd.DataFrame, y: pd.Series, model: str, n_splits: 
 
     X, y = X[keep], y[keep].astype(int)
 
-    # Cross-validate with the shared Drosophila harness and hyperparameters.
-    classifier = MODELS[model]["class"](**TIME_SPECIFIC_MODEL_PARAMS[model])
+    # Cross-validate with the shared Drosophila harness and hyperparameters;
+    # only the thread count follows the Snakemake job.
+    params = dict(TIME_SPECIFIC_MODEL_PARAMS[model])
+    if "n_jobs" in params:
+        params["n_jobs"] = n_jobs
+    classifier = MODELS[model]["class"](**params)
     result = cross_validate(classifier, X, y, KFold(n_splits=n_splits, shuffle=True, random_state=0), None)
 
     logger.info(f"  {model} | {y.name}: ROC-AUC={result.mean_auc:.4f} +/- {result.std_auc:.4f} | "
                 f"ACC={result.mean_acc:.4f} | loops={len(y)} pos={int(y.sum())}")
 
     row = {
-        "condition": y.name, "model": model, "n_cells": n_cells, "n_features": X.shape[1],
+        "condition": y.name, "model": model, "n_cells": n_cells, "n_groups": n_groups,
+        "n_features": X.shape[1],
         "n_loops": len(y), "positives": int(y.sum()),
         "mean_auc": round(result.mean_auc, 6), "std_auc": round(result.std_auc, 6),
         "mean_acc": round(result.mean_acc, 6),
@@ -98,44 +103,16 @@ def run_condition(enrichment: pd.DataFrame, y: pd.Series, model: str, n_splits: 
     return row, result
 
 
-def plot_combined_roc(results: dict[str, CVResult], n_loops_by_cond: dict[str, int],
-                      model: str, feature_set: str, features: str, n_cells: int,
-                      out_dir: Path) -> None:
-    """Overlay every condition's ROC curve into one figure.
-
-    Each condition now has its own loop set, so the per-condition loop count goes
-    in the legend rather than as a single figure-wide count in the title.
-    """
-    full = MODELS[model]["full"]
-
-    fig, ax = plt.subplots(figsize=(6, 6))
-    for cond, result in results.items():
-        ax.plot(result.mean_fpr, result.mean_tpr,
-                label=f"{cond} (AUC = {result.mean_auc:.3f}, {n_loops_by_cond[cond]:,} loops)")
-        ax.fill_between(result.mean_fpr, result.tprs_lower, result.tprs_upper, alpha=0.2)
-
-    ax.plot([0, 1], [0, 1], "k--", lw=1)
-    ax.grid(axis="both")
-    ax.set(xlabel="False Positive Rate", ylabel="True Positive Rate",
-           title=f"{full} ROC by loop label, {feature_set} features\n"
-                 f"{features}, {n_cells:,} cells")
-    ax.legend(loc="lower right")
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for fmt in ("png", "pdf"):
-        fig.savefig(out_dir / f"roc_combined.{fmt}", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-
-
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Human Stage 1: condition-specific XGBoost loop-presence classifier.")
+    parser = argparse.ArgumentParser(description="Human Stage 1: one condition's XGBoost loop-presence classifier.")
     parser.add_argument("--stage0_dir", type=Path, default=Path("results/human_prototype/prepare_data"))
     parser.add_argument("--output_dir", type=Path, default=Path("results/human_prototype/train"))
     parser.add_argument("--feature_set", default=None,
                         help="Feature set name for plot titles; defaults to output_dir's name.")
     parser.add_argument("--model", default="XGB", choices=list(MODELS.keys()))
-    parser.add_argument("--conditions", nargs="*", default=CONDITIONS)
+    parser.add_argument("--condition", required=True, choices=CONDITIONS)
     parser.add_argument("--n_splits", type=int, default=10)
+    parser.add_argument("--n_jobs", type=int, default=12, help="Classifier threads (for models that take n_jobs).")
     parser.add_argument("--log_path", type=Path, default=Path("logs/human_prototype/stage1.log"))
     args = parser.parse_args()
 
@@ -150,34 +127,22 @@ def main() -> None:
 
     fig_dir = args.output_dir / "figures"
     full = MODELS[args.model]["full"]
+    cond = args.condition
 
-    rows, results = [], {}
-    for cond in args.conditions:
-        y = pd.read_csv(args.stage0_dir / f"y_{cond}.csv", index_col=0).iloc[:, 0]
-        y.name = cond
+    y = pd.read_csv(args.stage0_dir / f"y_{cond}.csv", index_col=0).iloc[:, 0]
+    y.name = cond
+    row, result = run_condition(enrichment, y, args.model, args.n_splits, args.n_jobs,
+                                n_cells, len(cells_per_group))
 
-        row, result = run_condition(enrichment, y, args.model, args.n_splits, n_cells)
-        rows.append(row)
-        results[cond] = result
+    save_cv_result(result, str(args.output_dir / "roc_results" / f"{cond}.pkl"))
+    plot_roc(result,
+             title=condition_title(full, cond, feature_set, row["n_loops"], features,
+                                   n_cells, result.mean_auc, result.std_auc),
+             out_paths=[fig_dir / f"roc_{cond}.{fmt}" for fmt in ("png", "pdf")])
 
-        save_cv_result(result, str(args.output_dir / "roc_results" / f"{cond}.pkl"))
-        plot_roc(result,
-                 title=condition_title(full, cond, feature_set, row["n_loops"], features,
-                                       n_cells, result.mean_auc, result.std_auc),
-                 out_paths=[fig_dir / f"roc_{cond}.{fmt}" for fmt in ("png", "pdf")])
-
-    plot_combined_roc(results, {r["condition"]: r["n_loops"] for r in rows},
-                      args.model, feature_set, features, n_cells, fig_dir)
-
-    summary = pd.DataFrame(rows)
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    summary.to_csv(args.output_dir / "cv_summary.csv", index=False)
-    logger.info(f"Wrote {args.output_dir / 'cv_summary.csv'} and ROC figures to {fig_dir}")
-    logger.info(f"CV summary:\n{summary.to_string(index=False)}")
-
-    best = summary.loc[summary["mean_auc"].idxmax()]
-    logger.info(f"Best condition: {best['condition']} ROC-AUC={best['mean_auc']:.4f} "
-                f"(target >= 0.55: {'PASS' if best['mean_auc'] >= 0.55 else 'FAIL'})")
+    pd.DataFrame([row]).to_csv(args.output_dir / f"cv_{cond}.csv", index=False)
+    logger.info(f"Wrote {args.output_dir / f'cv_{cond}.csv'} and {fig_dir / f'roc_{cond}.png'}")
 
 
 if __name__ == "__main__":

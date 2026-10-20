@@ -38,12 +38,20 @@ conditions:
 #   other_conditions - the other conditions' loops whose Hi-C rectangle coincides with
 #                      no real loop of the condition (pairToPair -type both); parameter-free.
 #   n2               - Cupriak's new_pairs_of_anchors: random new pairs of the condition's
-#                      own anchors, neg_pos_ratio per positive (minus the few that overlap
-#                      a real loop rectangle), drawn with random_state.
+#                      own anchors, neg_pos_ratio[condition] per positive (minus the few that
+#                      overlap a real loop rectangle), drawn with random_state.
 negatives:
   - "other_conditions"
   - "n2"
-neg_pos_ratio: 5          # n2 only (Cupriak's human_neg_pos_ratio)
+# n2 only: negatives drawn per positive, per condition. Set to other_conditions'
+# negatives / positives so both modes have the same class balance (counts from the
+# wloczykij build_loop_universe.log, 2026-10-05; int(ratio * positives) reproduces
+# the negative count exactly):
+#   fetal 41230 / 26264, glia 41389 / 27342, neuron 37583 / 28576
+neg_pos_ratio:
+  fetal: 1.56983
+  glia: 1.513752
+  neuron: 1.315195
 random_state: 42          # n2 only (Cupriak's random_state)
 
 # Stage 0 feature sets; every listed set is built and trained for every negative mode.
@@ -65,6 +73,9 @@ min_cells_per_peak: 1    # keep every accessible peak (chromVAR default; filterP
 bg_iterations: 50         # chromVAR background peak sets (chromVAR default)
 model: "XGB"
 n_splits: 10
+# Classifier threads per Stage 1 job; there is one job per negative mode x feature
+# set x condition (12), so --cores bounds how many run at once.
+stage1_threads: 4
 
 # chromVAR is the one heavy step; these bound its BLAS threads.
 blas_threads: 12

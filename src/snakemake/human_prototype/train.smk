@@ -1,25 +1,27 @@
-# Stage 1 (human) - condition-specific XGBoost classifiers per negative mode and
-# feature set, then the ROC-AUC grid across all of them.
+# Stage 1 (human) - one XGBoost classifier per negative mode x feature set x
+# condition, a per-feature-set summary, then the ROC-AUC grid across all of them.
 
 rule all_train:
     input:
         train_targets()
 
 
-# One (negative mode, feature set) -> three condition classifiers + ROC figures + a CV summary.
+# One (negative mode, feature set, condition) -> one classifier + its ROC figure
+# and summary row; the conditions run as separate, parallel jobs.
 rule run_stage1:
     input:
         enrichment="results/human_prototype/{negatives}/prepare_data/{features}/motif_enrichment.csv",
         n_cells="results/human_prototype/{negatives}/prepare_data/{features}/n_cells.tsv",
-        y=expand("results/human_prototype/{{negatives}}/prepare_data/{{features}}/y_{cond}.csv",
-                 cond=config["conditions"]),
+        y="results/human_prototype/{negatives}/prepare_data/{features}/y_{condition}.csv",
     output:
-        summary="results/human_prototype/{negatives}/train/{features}/cv_summary.csv",
-        combined="results/human_prototype/{negatives}/train/{features}/figures/roc_combined.png",
-        roc=expand("results/human_prototype/{{negatives}}/train/{{features}}/figures/roc_{cond}.png",
-                   cond=config["conditions"]),
+        row="results/human_prototype/{negatives}/train/{features}/cv_{condition}.csv",
+        cv_result="results/human_prototype/{negatives}/train/{features}/roc_results/{condition}.pkl",
+        roc="results/human_prototype/{negatives}/train/{features}/figures/roc_{condition}.png",
+    wildcard_constraints:
+        condition="|".join(config["conditions"]),
+    threads: config["stage1_threads"]
     log:
-        "logs/human_prototype/{negatives}/stage1/{features}.log"
+        "logs/human_prototype/{negatives}/stage1/{features}/{condition}.log"
     conda:
         "../../../env/human_prep.yaml"
     shell:
@@ -28,8 +30,36 @@ rule run_stage1:
             --stage0_dir results/human_prototype/{wildcards.negatives}/prepare_data/{wildcards.features} \
             --output_dir results/human_prototype/{wildcards.negatives}/train/{wildcards.features} \
             --feature_set {wildcards.features} \
+            --condition {wildcards.condition} \
             --model {config[model]} \
             --n_splits {config[n_splits]} \
+            --n_jobs {threads} \
+            --log_path {log}
+        """
+
+
+# One (negative mode, feature set): CV summary table + combined ROC of all conditions.
+rule summarize_stage1:
+    input:
+        rows=expand("results/human_prototype/{{negatives}}/train/{{features}}/cv_{condition}.csv",
+                    condition=config["conditions"]),
+        cv_results=expand("results/human_prototype/{{negatives}}/train/{{features}}/roc_results/{condition}.pkl",
+                          condition=config["conditions"]),
+    output:
+        summary="results/human_prototype/{negatives}/train/{features}/cv_summary.csv",
+        combined="results/human_prototype/{negatives}/train/{features}/figures/roc_combined.png",
+    params:
+        conditions=" ".join(config["conditions"]),
+    log:
+        "logs/human_prototype/{negatives}/summarize_stage1/{features}.log"
+    conda:
+        "../../../env/human_prep.yaml"
+    shell:
+        """
+        PYTHONPATH=src/py python src/py/human_prepare_data/summarize_stage1.py \
+            --train_dir results/human_prototype/{wildcards.negatives}/train/{wildcards.features} \
+            --feature_set {wildcards.features} \
+            --conditions {params.conditions} \
             --log_path {log}
         """
 

@@ -25,7 +25,9 @@ on the config key `negatives` (see `build_loop_universe.py`):
   with NO actual loop of this condition (the two anchors are never paired
   together here);
 - `n2` - `new_pairs_of_anchors`: random new pairs of this condition's
-  own anchors, `neg_pos_ratio` per positive, drawn with `random_state`.
+  own anchors, `neg_pos_ratio[condition]` per positive, drawn with `random_state`.
+  The per-condition ratios are set to `other_conditions`' negatives / positives,
+  so both modes have the same class balance.
 
 Everything from the loop universe on is written under
 `data/human_prototype/interim/<negatives>/` and `results/human_prototype/<negatives>/`
@@ -87,7 +89,10 @@ modes. Parameters, sample and paths live in
 - `run_stage0_human.py` - Stage 0 driver: one feature set's motif-enrichment
   matrix (pooled, or per cell group) + per-condition label vectors (each
   condition's positives + clean negatives).
-- `run_stage1_human.py` - Stage 1 driver: condition-specific XGBoost + ROC plots.
+- `run_stage1_human.py` - Stage 1 driver: one condition's XGBoost + ROC plot
+  (Snakemake runs one job per negative mode x feature set x condition).
+- `summarize_stage1.py` - collect one feature set's conditions into
+  `cv_summary.csv` and the combined ROC figure.
 - `aggregate_results.py` - collate every (negative mode x feature set x label)
   classifier into one table and ROC-AUC grid.
 - `inspect_snap.py` - utility (not part of the pipeline): dump a `.snap` file's

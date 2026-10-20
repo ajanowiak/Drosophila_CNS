@@ -112,7 +112,9 @@ rule build_loop_universe:
     params:
         # Only n2 draws at random, so only n2 reruns when these change.
         n2_args=lambda wildcards: (
-            f"--neg_pos_ratio {config['neg_pos_ratio']} --random_state {config['random_state']}"
+            "--neg_pos_ratio "
+            + " ".join(f"{cond}={ratio}" for cond, ratio in config["neg_pos_ratio"].items())
+            + f" --random_state {config['random_state']}"
             if wildcards.negatives == "n2" else ""
         ),
     log:
