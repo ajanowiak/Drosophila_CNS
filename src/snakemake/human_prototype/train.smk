@@ -26,6 +26,7 @@ rule run_stage1:
         "../../../env/human_prep.yaml"
     shell:
         """
+        export OPENBLAS_NUM_THREADS={threads} OMP_NUM_THREADS={threads} MKL_NUM_THREADS={threads}
         PYTHONPATH=src/py python src/py/human_prepare_data/run_stage1_human.py \
             --stage0_dir results/human_prototype/{wildcards.negatives}/prepare_data/{wildcards.features} \
             --output_dir results/human_prototype/{wildcards.negatives}/train/{wildcards.features} \

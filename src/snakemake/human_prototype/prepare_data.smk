@@ -167,13 +167,14 @@ rule compute_chromvar:
         metadata="data/human_prototype/interim/cell_metadata.tsv",
     output:
         "data/human_prototype/interim/motifs_chromvar.tsv"
+    threads: config["blas_threads"]
     log:
         "logs/human_prototype/compute_chromvar.log"
     conda:
         "../../../env/human_prep_r.yaml"
     shell:
         """
-        export OPENBLAS_NUM_THREADS={config[blas_threads]} OMP_NUM_THREADS={config[blas_threads]}
+        export OPENBLAS_NUM_THREADS={threads} OMP_NUM_THREADS={threads} MKL_NUM_THREADS={threads}
         Rscript src/R/human_prepare_data/compute_chromvar.R \
             --snap {input.snap} \
             --metadata {input.metadata} \
@@ -239,12 +240,14 @@ rule run_stage0:
                  cond=config["conditions"]),
     params:
         partition_args=partition_args,
+    threads: config["stage0_threads"]
     log:
         "logs/human_prototype/{negatives}/stage0/{features}.log"
     conda:
         "../../../env/human_prep.yaml"
     shell:
         """
+        export OPENBLAS_NUM_THREADS={threads} OMP_NUM_THREADS={threads} MKL_NUM_THREADS={threads}
         PYTHONPATH=src/py python src/py/human_prepare_data/run_stage0_human.py \
             --anchor_openness {input.openness} \
             --motifs {input.motifs} \

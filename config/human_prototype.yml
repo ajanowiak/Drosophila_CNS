@@ -73,9 +73,12 @@ min_cells_per_peak: 1    # keep every accessible peak (chromVAR default; filterP
 bg_iterations: 50         # chromVAR background peak sets (chromVAR default)
 model: "XGB"
 n_splits: 10
-# Classifier threads per Stage 1 job; there is one job per negative mode x feature
-# set x condition (12), so --cores bounds how many run at once.
+# Threads per job. Every heavy rule declares these and pins its BLAS / OpenMP
+# threads to them, so `--cores N` really caps the whole run at N cores.
+# Stage 0 has 4 jobs (negative mode x feature set), Stage 1 has 12 (x condition).
+stage0_threads: 3
 stage1_threads: 4
 
-# chromVAR is the one heavy step; these bound its BLAS threads.
-blas_threads: 12
+# chromVAR's BLAS threads; below --cores so anchor openness and the loop
+# universes can run alongside it.
+blas_threads: 8
