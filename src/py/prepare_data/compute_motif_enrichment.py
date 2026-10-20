@@ -13,9 +13,33 @@ from prepare_data.io import load_window, load_metadata, save_enrichment_matrix, 
 
 logger = logging.getLogger(__name__)
 
+
+def masked_sums(
+    mask: np.ndarray,
+    motif_scores: np.ndarray,
+    motif_nan: np.ndarray | None,
+) -> np.ndarray:
+    """
+    Sum each motif's scores over each loop's masked cells, as one matrix product.
+
+    Args:
+        mask: loops x cells 0/1 matrix selecting the cells to sum over.
+        motif_scores: cells x motifs scores, with NaN replaced by 0.
+        motif_nan: cells x motifs 0/1 matrix marking the NaN scores, or None if there are none.
+
+    Returns:
+        loops x motifs sums; NaN wherever a summed score was NaN, as in a plain sum.
+    """
+    sums = mask @ motif_scores
+    if motif_nan is not None:
+        sums[(mask @ motif_nan) > 0] = np.nan
+    return sums
+
+
 def compute_group_enrichment(
     loops_df: pd.DataFrame,
     motifs_df: pd.DataFrame,
+    chunk_size: int = 4096,
 ) -> tuple[pd.DataFrame, np.ndarray]:
     """
     Compute motif enrichment for a single group of cells.
@@ -33,7 +57,11 @@ def compute_group_enrichment(
 
         motifs_df:
             motifs x cells chromVAR score matrix.
-        
+
+        chunk_size:
+            Number of loops per matrix product; bounds the memory of the
+            float loops x cells masks.
+
     Returns:
         A tuple containing
 
@@ -46,30 +74,28 @@ def compute_group_enrichment(
     n_loops = len(loop_ids)
     n_motifs = len(motif_ids)
 
-    sum_11 = np.zeros((n_loops, n_motifs), dtype=np.float64)
-    count_11 = np.zeros(n_loops, dtype=np.int64)
-
-    sum_other = np.zeros((n_loops, n_motifs), dtype=np.float64)
-    count_other = np.zeros(n_loops, dtype=np.int64)
-
-    # Convert once to avoid repeated DataFrame indexing inside the loop.
     loops_mat = loops_df.to_numpy()
-    motifs_mat = motifs_df.to_numpy()
+    motif_scores = motifs_df.to_numpy(dtype=np.float64).T   # cells x motifs
 
-    for i in range(n_loops):
-        mask_11 = loops_mat[i] == 11
-        mask_other = ~mask_11
+    # A NaN score must only spoil the sums it enters, so zero it for the
+    # product and track where it was separately.
+    nan_scores = np.isnan(motif_scores)
+    motif_nan = nan_scores.astype(np.float64) if nan_scores.any() else None
+    motif_scores = np.where(nan_scores, 0.0, motif_scores)
 
-        motifs_11 = motifs_mat[:, mask_11]
-        motifs_other = motifs_mat[:, mask_other]
+    sum_11 = np.empty((n_loops, n_motifs), dtype=np.float64)
+    sum_other = np.empty((n_loops, n_motifs), dtype=np.float64)
 
-        if motifs_11.shape[1] > 0:
-            sum_11[i] += motifs_11.sum(axis=1)
-            count_11[i] += motifs_11.shape[1]
+    # Sums over the "1-1" cells and over the other cells are mask x score
+    # products, done a chunk of loops at a time.
+    for start in range(0, n_loops, chunk_size):
+        rows = slice(start, start + chunk_size)
+        mask_11 = (loops_mat[rows] == 11).astype(np.float64)
+        sum_11[rows] = masked_sums(mask_11, motif_scores, motif_nan)
+        sum_other[rows] = masked_sums(1.0 - mask_11, motif_scores, motif_nan)
 
-        if motifs_other.shape[1] > 0:
-            sum_other[i] += motifs_other.sum(axis=1)
-            count_other[i] += motifs_other.shape[1]
+    count_11 = (loops_mat == 11).sum(axis=1).astype(np.int64)
+    count_other = loops_mat.shape[1] - count_11
 
     with np.errstate(divide="ignore", invalid="ignore"):
         mean_11 = np.where(
