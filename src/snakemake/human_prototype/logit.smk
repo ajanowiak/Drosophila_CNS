@@ -1,5 +1,7 @@
 # Logit (human) - a statsmodels Logit on the full feature set, per negative mode
 # x feature set x condition. Runs in env/analysis.yaml, which has statsmodels.
+# stderr is appended to the job log, so a failed fit's traceback and statsmodels'
+# convergence / Hessian warnings end up next to the script's own log lines.
 
 rule all_logit:
     input:
@@ -31,5 +33,6 @@ rule run_logit:
             --p_value_threshold {config[logit][p_value_threshold]} \
             --top_n_coeffs {config[logit][top_n_coeffs]} \
             --volcano_effect_threshold {config[logit][volcano_effect_threshold]} \
-            --log_path {log}
+            --log_path {log} \
+            2>> {log}
         """

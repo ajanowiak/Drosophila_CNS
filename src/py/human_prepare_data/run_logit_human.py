@@ -49,8 +49,14 @@ def main() -> None:
     enrichment = pd.read_csv(args.stage0_dir / "motif_enrichment.csv", index_col=0)
     y = pd.read_csv(args.stage0_dir / f"y_{cond}.csv", index_col=0).iloc[:, 0]
 
-    # statsmodels cannot take NaN, so drop loops with undefined enrichment
+    # statsmodels cannot take NaN; motifs undefined for every loop would drop every
+    # loop below, so drop those motifs first, then loops with undefined enrichment
     X = enrichment.loc[y.index]
+    all_nan = X.columns[X.isna().all()]
+    if len(all_nan):
+        logger.info(f"[{cond}] dropped {len(all_nan)} features with NaN enrichment in every loop: {list(all_nan)}")
+    X = X.drop(columns=all_nan)
+
     keep = X.notna().all(axis=1)
     X, y = X[keep], y[keep]
     logger.info(f"[{cond}] dropped {int((~keep).sum())} loops with NaN enrichment; "
