@@ -38,23 +38,13 @@ def train_targets():
     ) + ["results/human_prototype/train_summary.csv"]
 
 
-def logit_targets():
-    return expand(
-        "results/human_prototype/{negatives}/logit/{features}/summary_{condition}.csv",
-        negatives=config["negatives"],
-        features=config["logit_feature_sets"],
-        condition=config["conditions"],
-    )
-
-
 # rule all must stay the first rule in the workflow (across all includes) so it
 # remains Snakemake's default target when none is given on the CLI.
 rule all:
     input:
-        prepare_data_targets() + train_targets() + logit_targets()
+        prepare_data_targets() + train_targets()
 
 
 # One file per stage, mirroring the src/py/human_prepare_data layout.
 include: "prepare_data.smk"
 include: "train.smk"
-include: "logit.smk"

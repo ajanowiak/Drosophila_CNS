@@ -78,15 +78,6 @@ n_splits: 10
 # Stage 0 has 4 jobs (negative mode x feature set), Stage 1 has 12 (x condition).
 stage0_threads: 3
 stage1_threads: 4
-logit_threads: 4
-
-# statsmodels Logit on the full feature set, for these feature sets only.
-logit_feature_sets:
-  - "motif"
-logit:
-  p_value_threshold: 0.05         # BH-adjusted
-  top_n_coeffs: 20
-  volcano_effect_threshold: 0.5
 
 # chromVAR's BLAS threads; below --cores so anchor openness and the loop
 # universes can run alongside it.
