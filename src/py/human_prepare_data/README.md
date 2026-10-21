@@ -50,7 +50,7 @@ matrix), and anchor openness once per distinct anchor, shared by both negative
 modes. Parameters, sample and paths live in
 `config/human_prototype.yml`. Most steps run in the `human_prep` env
 (`env/human_prep.yaml`); the chromVAR step is in R (`src/R/human_prepare_data/`,
-`env/human_prep_r.yaml`).
+`env/human_prep_r.yaml`); the Logit runs in `env/analysis.yaml`.
 
 ## Scripts
 
@@ -93,6 +93,8 @@ modes. Parameters, sample and paths live in
   (Snakemake runs one job per negative mode x feature set x condition).
 - `summarize_stage1.py` - collect one feature set's conditions into
   `cv_summary.csv` and the combined ROC figure.
+- `run_logit_human.py` - one condition's statsmodels Logit on the full feature
+  set (coefficients with BH-adjusted p-values, coefficient and volcano plots).
 - `aggregate_results.py` - collate every (negative mode x feature set x label)
   classifier into one table and ROC-AUC grid.
 - `inspect_snap.py` - utility (not part of the pipeline): dump a `.snap` file's

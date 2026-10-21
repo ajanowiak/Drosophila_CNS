@@ -27,7 +27,7 @@ def fit_logit_summary(X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
     Fit a statsmodels Logit on the full data and summarize its coefficients.
 
     Returns a DataFrame indexed by feature name (plus "const" for the
-    intercept) with coef, std_err, z, unadjusted/BH-adjusted/TSBH-adjusted
+    intercept) with coef, std_err, z, unadjusted and BH-adjusted
     p-values, and 95% CI bounds, sorted by absolute coefficient size.
     """
     res = sm.Logit(y, sm.add_constant(X)).fit(disp=False)
@@ -41,10 +41,8 @@ def fit_logit_summary(X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
     # non-significant) for those features.
     finite = p_unadjusted.notna()
     p_bh = pd.Series(np.nan, index=p_unadjusted.index)
-    p_tsbh = pd.Series(np.nan, index=p_unadjusted.index)
     if finite.any():
         _, p_bh[finite], _, _ = multipletests(p_unadjusted[finite], method="fdr_bh")
-        _, p_tsbh[finite], _, _ = multipletests(p_unadjusted[finite], method="fdr_tsbh")
 
     summary_df = pd.DataFrame({
         "coef": res.params,
@@ -52,7 +50,6 @@ def fit_logit_summary(X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
         "z": res.tvalues,
         "p_unadjusted": p_unadjusted,
         "p_adjusted_bh": p_bh,
-        "p_adjusted_tsbh": p_tsbh,
     })
 
     ci = res.conf_int()

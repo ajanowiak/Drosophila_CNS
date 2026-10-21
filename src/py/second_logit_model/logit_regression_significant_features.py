@@ -68,7 +68,7 @@ def run_significant_features(
     volcano_plot_paths = [f"{fig_dir}/{tissue}_volcano.pdf", f"{fig_dir}/{tissue}_volcano.png"]
     empty_summary_columns = [
         "coef", "std_err", "z", "p_unadjusted", "p_adjusted_bh",
-        "p_adjusted_tsbh", "ci_lower", "ci_upper", "motif_name",
+        "ci_lower", "ci_upper", "motif_name",
     ]
 
     significant_features = extract_significant_features(tissue, shap_model, selection_tag, p_value_threshold)

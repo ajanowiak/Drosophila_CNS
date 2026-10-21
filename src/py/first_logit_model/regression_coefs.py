@@ -101,7 +101,7 @@ def run_regression_coefs(
         logger.info(f"[{tissue}] shap_model={shap_model} selection={selection_tag} FIT FAILED: {e}")
         empty_columns = [
             "coef", "std_err", "z", "p_unadjusted", "p_adjusted_bh",
-            "p_adjusted_tsbh", "ci_lower", "ci_upper", "motif_name",
+            "ci_lower", "ci_upper", "motif_name",
         ]
         save_summary_table(pd.DataFrame(columns=empty_columns), summary_path)
         message = f"Fit failed for {tissue} ({num_features} features, {selection_tag}):\n{e}"
