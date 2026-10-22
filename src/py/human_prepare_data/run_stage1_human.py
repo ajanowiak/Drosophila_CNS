@@ -52,9 +52,8 @@ def condition_title(full: str, cond: str, feature_set: str, n_loops: int, featur
     return title
 
 
-def run_condition(enrichment: pd.DataFrame, y: pd.Series, model: str, n_splits: int,
-                  n_jobs: int, n_cells: int, n_groups: int) -> tuple[dict, CVResult]:
-    """Cross-validate one condition and return its summary row and CVResult.
+def select_training_loops(enrichment: pd.DataFrame, y: pd.Series, model: str) -> tuple[pd.DataFrame, pd.Series]:
+    """Feature matrix and integer labels of the loops one condition's classifier trains on.
 
     NaN policy: a loop with no both-open "11" cell (within a cell group, for
     grouped features) has undefined (NaN) enrichment for those features. For a
@@ -66,7 +65,6 @@ def run_condition(enrichment: pd.DataFrame, y: pd.Series, model: str, n_splits: 
     """
     X = enrichment.loc[y.index]
 
-    # Decide which loops to train on (see the NaN policy above).
     if model in NAN_TOLERANT_MODELS:
         keep = y.notna()
         n_nan = int(X.loc[keep].isna().any(axis=1).sum())
@@ -80,14 +78,27 @@ def run_condition(enrichment: pd.DataFrame, y: pd.Series, model: str, n_splits: 
         reason = "undefined label" if model in NAN_TOLERANT_MODELS else "undefined label or enrichment"
         logger.info(f"  [{y.name}] dropped {n_drop} loops ({reason})")
 
-    X, y = X[keep], y[keep].astype(int)
+    return X[keep], y[keep].astype(int)
 
-    # Cross-validate with the shared Drosophila harness and hyperparameters;
-    # only the thread count follows the Snakemake job.
+
+def build_classifier(model: str, n_jobs: int):
+    """Unfitted classifier with the Drosophila time-specific hyperparameters; only the thread count follows the job."""
     params = dict(TIME_SPECIFIC_MODEL_PARAMS[model])
     if "n_jobs" in params:
         params["n_jobs"] = n_jobs
-    classifier = MODELS[model]["class"](**params)
+    return MODELS[model]["class"](**params)
+
+
+def run_condition(enrichment: pd.DataFrame, y: pd.Series, model: str, n_splits: int,
+                  n_jobs: int, n_cells: int, n_groups: int) -> tuple[dict, CVResult]:
+    """Cross-validate one condition and return its summary row and CVResult.
+
+    The loops are chosen by select_training_loops (see its NaN policy).
+    """
+    X, y = select_training_loops(enrichment, y, model)
+
+    # Cross-validate with the shared Drosophila harness and hyperparameters.
+    classifier = build_classifier(model, n_jobs)
     result = cross_validate(classifier, X, y, KFold(n_splits=n_splits, shuffle=True, random_state=0), None)
 
     logger.info(f"  {model} | {y.name}: ROC-AUC={result.mean_auc:.4f} +/- {result.std_auc:.4f} | "

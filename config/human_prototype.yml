@@ -78,6 +78,9 @@ n_splits: 10
 # Stage 0 has 4 jobs (negative mode x feature set), Stage 1 has 12 (x condition).
 stage0_threads: 3
 stage1_threads: 4
+# Stage 2 (SHAP) has 12 jobs (negative mode x feature set x condition); each holds the
+# feature matrix and a same-sized SHAP matrix (~1.6 GB each for motif x cellclass).
+shap_threads: 4
 
 # chromVAR's BLAS threads; below --cores so anchor openness and the loop
 # universes can run alongside it.

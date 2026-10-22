@@ -95,6 +95,11 @@ modes. Parameters, sample and paths live in
   `cv_summary.csv` and the combined ROC figure.
 - `aggregate_results.py` - collate every (negative mode x feature set x label)
   classifier into one table and ROC-AUC grid.
+- `run_shap_human.py` - Stage 2 driver: fits one condition's all-data XGBoost
+  (same loops and hyperparameters as Stage 1) and writes the Drosophila-style
+  SHAP table and beeswarm under `results/human_prototype/<negatives>/shap/<feature_set>/`;
+  the table splits each feature into `matrix_id`, `motif_name` and `group`. Runs
+  in the `analysis` env (which has shap).
 - `inspect_snap.py` - utility (not part of the pipeline): dump a `.snap` file's
   HDF5 structure.
 - `survey_pfc_snaps.py` - one-off helper (not part of the pipeline) used to pick
