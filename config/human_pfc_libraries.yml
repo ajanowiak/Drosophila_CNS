@@ -1,0 +1,26 @@
+# config/human_pfc_libraries.yml
+#
+# Prototype, not part of the main human pipeline: per-library Stage 0 for the
+# GSE244618 PFC libraries (src/snakemake/human_prototype/pfc_libraries.smk).
+# Loaded on top of config/human_prototype.yml, whose paths and parameters
+# (genome, JASPAR, atlas, QC and chromVAR settings) it reuses.
+
+pfc:
+  # {gsm_stub} is the GSM accession with its last three digits replaced by "nnn".
+  snap_url_template: "https://ftp.ncbi.nlm.nih.gov/geo/samples/{gsm_stub}/{gsm}/suppl/{gsm}_{library}.snap.gz"
+  # Loop universe (built by the main pipeline) and Stage 0 feature set; the
+  # feature set must be one without a cell partition.
+  negatives: "n2"
+  feature_set: "motif"
+  # Atlas library id -> GEO accession, region and donor (GSE244618 sample records):
+  # the prefrontal neocortex regions A46 (dlPFC), A44-A45 and A25 from donors 1, 2, 4.
+  libraries:
+    MM_417:  {gsm: "GSM7822145", region: "A46",     donor: "Donor 1"}
+    MM_418:  {gsm: "GSM7822146", region: "A46",     donor: "Donor 2"}
+    MM_841:  {gsm: "GSM7822147", region: "A46",     donor: "Donor 4"}
+    XH_496:  {gsm: "GSM7822157", region: "A44-A45", donor: "Donor 1"}
+    MM_436:  {gsm: "GSM7822158", region: "A44-A45", donor: "Donor 2"}
+    MM_863:  {gsm: "GSM7822159", region: "A44-A45", donor: "Donor 4"}
+    QY_1468: {gsm: "GSM7822196", region: "A25",     donor: "Donor 1"}
+    QY_1470: {gsm: "GSM7822197", region: "A25",     donor: "Donor 2"}
+    MM_837:  {gsm: "GSM7822198", region: "A25",     donor: "Donor 4"}
