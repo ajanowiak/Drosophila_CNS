@@ -8,10 +8,14 @@
 pfc:
   # {gsm_stub} is the GSM accession with its last three digits replaced by "nnn".
   snap_url_template: "https://ftp.ncbi.nlm.nih.gov/geo/samples/{gsm_stub}/{gsm}/suppl/{gsm}_{library}.snap.gz"
-  # Loop universe (built by the main pipeline) and Stage 0 feature set; the
-  # feature set must be one without a cell partition.
+  # Loop universe (built by the main pipeline) and Stage 0 feature sets (names from
+  # feature_sets in human_prototype.yml). feature_set must have no cell partition.
+  # cellclass_feature_set must have one, but only its column is used: each library
+  # is partitioned by its own cell_metadata.tsv, not by the partition path given
+  # there (that one is the main pipeline's sample).
   negatives: "n2"
   feature_set: "motif"
+  cellclass_feature_set: "motif_x_cellclass"
   # Atlas library id -> GEO accession, region and donor (GSE244618 sample records):
   # the prefrontal neocortex regions A46 (dlPFC), A44-A45 and A25 from donors 1, 2, 4.
   libraries:

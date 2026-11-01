@@ -1,9 +1,10 @@
 # Prototype, standalone (not included in the main human Snakefile): per-library
 # Stage 0 for the GSE244618 PFC libraries in config/human_pfc_libraries.yml.
 # The main pipeline's steps run separately inside each library - QC + atlas labels,
-# chromVAR, anchor openness and the motif-enrichment matrix are computed within one
+# chromVAR, anchor openness and the motif-enrichment matrices are computed within one
 # library's cells - against the main pipeline's loop universe, so every library
-# scores the same loops.
+# scores the same loops. Two feature sets per library: pooled motifs, and motif x
+# cell class (enrichment within each class of the library's own cells).
 #
 # The shared inputs (hg38 + .fai, JASPAR, the Rahman loop BEDs, the atlas metatable
 # and the loop universe) are not built here; they must already exist from the main
@@ -22,8 +23,15 @@ LIBRARIES = list(PFC["libraries"])
 if config["feature_sets"][PFC["feature_set"]]:
     raise ValueError(f"pfc.feature_set must be a feature set without a cell partition, got {PFC['feature_set']!r}")
 
+CELLCLASS_SET = config["feature_sets"][PFC["cellclass_feature_set"]]
+if not CELLCLASS_SET:
+    raise ValueError(f"pfc.cellclass_feature_set must be a feature set with a cell partition, "
+                     f"got {PFC['cellclass_feature_set']!r}")
+
 LIBRARY_INTERIM = "data/human_prototype/interim/libraries/{library}"
 LIBRARY_STAGE0 = f"results/human_prototype/{PFC['negatives']}/libraries/{{library}}/prepare_data/{PFC['feature_set']}"
+LIBRARY_CELLCLASS_STAGE0 = (f"results/human_prototype/{PFC['negatives']}/libraries/{{library}}/prepare_data/"
+                            f"{PFC['cellclass_feature_set']}")
 
 wildcard_constraints:
     library="|".join(LIBRARIES),
@@ -45,7 +53,8 @@ def library_snap_url(wildcards):
 
 rule pfc:
     input:
-        expand(f"{LIBRARY_STAGE0}/motif_enrichment.csv", library=LIBRARIES)
+        expand(f"{LIBRARY_STAGE0}/motif_enrichment.csv", library=LIBRARIES),
+        expand(f"{LIBRARY_CELLCLASS_STAGE0}/motif_enrichment.csv", library=LIBRARIES),
 
 
 # Download + decompress one library's .snap from GEO.
@@ -172,6 +181,42 @@ rule library_stage0:
             --anchor_openness {input.openness} \
             --motifs {input.motifs} \
             --loop_table {input.loop_table} \
+            --output_dir {params.output_dir} \
+            --log_path {log}
+        """
+
+
+# Motif x cell-class enrichment for one library: "1-1" vs other within each cell
+# class of the library's own analysis cells, one feature per motif x class. Kept
+# apart from library_stage0 so the pooled outputs are not rerun.
+rule library_stage0_cellclass:
+    input:
+        openness=f"{LIBRARY_INTERIM}/anchor_openness.tsv",
+        motifs=f"{LIBRARY_INTERIM}/motifs_chromvar.tsv",
+        loop_table=f"data/human_prototype/interim/{PFC['negatives']}/loop_universe.tsv",
+        partition=f"{LIBRARY_INTERIM}/cell_metadata.tsv",
+    output:
+        enrichment=f"{LIBRARY_CELLCLASS_STAGE0}/motif_enrichment.csv",
+        count11=f"{LIBRARY_CELLCLASS_STAGE0}/count11.csv",
+        n_cells=f"{LIBRARY_CELLCLASS_STAGE0}/n_cells.tsv",
+        y=[f"{LIBRARY_CELLCLASS_STAGE0}/y_{cond}.csv" for cond in config["conditions"]],
+    params:
+        output_dir=lambda wildcards, output: os.path.dirname(output.enrichment),
+        group_column=CELLCLASS_SET["column"],
+    threads: config["stage0_threads"]
+    log:
+        f"logs/human_prototype/{PFC['negatives']}/libraries/{{library}}/stage0/{PFC['cellclass_feature_set']}.log"
+    conda:
+        "../../../env/human_prep.yaml"
+    shell:
+        """
+        export OPENBLAS_NUM_THREADS={threads} OMP_NUM_THREADS={threads} MKL_NUM_THREADS={threads}
+        PYTHONPATH=src/py python src/py/human_prepare_data/run_stage0_human.py \
+            --anchor_openness {input.openness} \
+            --motifs {input.motifs} \
+            --loop_table {input.loop_table} \
+            --partition {input.partition} \
+            --group_column {params.group_column} \
             --output_dir {params.output_dir} \
             --log_path {log}
         """
