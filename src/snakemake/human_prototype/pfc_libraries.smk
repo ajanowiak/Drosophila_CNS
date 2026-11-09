@@ -55,6 +55,7 @@ rule pfc:
     input:
         expand(f"{LIBRARY_STAGE0}/motif_enrichment.csv", library=LIBRARIES),
         expand(f"{LIBRARY_CELLCLASS_STAGE0}/motif_enrichment.csv", library=LIBRARIES),
+        expand(f"{LIBRARY_INTERIM}/anchor_openness_summary.tsv", library=LIBRARIES),
 
 
 # Download + decompress one library's .snap from GEO.
@@ -151,6 +152,31 @@ rule library_anchor_openness:
             --snap {input.snap} \
             --loop_beds {input.loop_beds} \
             --metadata {input.metadata} \
+            --output {output} \
+            --log_path {log}
+        """
+
+
+# Open-cell counts per anchor (all cells and per cell class) for one library: a small
+# table for the anchor-openness notebook, which cannot reload the 2.4 GB matrix quickly.
+rule library_anchor_openness_summary:
+    input:
+        openness=f"{LIBRARY_INTERIM}/anchor_openness.tsv",
+        metadata=f"{LIBRARY_INTERIM}/cell_metadata.tsv",
+    output:
+        f"{LIBRARY_INTERIM}/anchor_openness_summary.tsv"
+    params:
+        group_column=CELLCLASS_SET["column"],
+    log:
+        "logs/human_prototype/libraries/{library}/anchor_openness_summary.log"
+    conda:
+        "../../../env/human_prep.yaml"
+    shell:
+        """
+        PYTHONPATH=src/py python src/py/human_prepare_data/summarize_anchor_openness.py \
+            --anchor_openness {input.openness} \
+            --metadata {input.metadata} \
+            --group_column {params.group_column} \
             --output {output} \
             --log_path {log}
         """
