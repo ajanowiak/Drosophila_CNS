@@ -51,6 +51,11 @@ For each condition C:
      same test as above). In the original repo, this filter is applied after the draw, 
      so the final ratio ends slightly below neg_pos_ratio.
 
+With --num_neg_loops instead of --neg_pos_ratio, step 4 draws num_neg_loops[C]
+pairs, and steps 4-5 repeat on the pairs not drawn yet, for as many pairs as step 5
+dropped, until exactly num_neg_loops[C] negatives remain. The first draw is the
+same as with a ratio giving the same count, so only the top-up pairs are new.
+
 Anchors keep their native Rahman intervals. Every real loop is a positive of its
 own condition only, and each condition's n2 pairs are negatives of that condition
 only (label NaN elsewhere): in this mode no loop of another condition is a negative.
@@ -212,9 +217,25 @@ def candidate_anchor_pairs(anchors: pd.DataFrame) -> tuple[np.ndarray, np.ndarra
     return np.concatenate(left), np.concatenate(right)
 
 
-def draw_n2_negatives(c_loops: pd.DataFrame, neg_pos_ratio: float, random_state: int,
+def anchor_pairs_frame(anchors: pd.DataFrame, left: np.ndarray, right: np.ndarray) -> pd.DataFrame:
+    """Mode n2 helper: loop rows (chr, x1, x2, y1, y2) of the given anchor-row pairs."""
+    return pd.DataFrame({
+        "chr": anchors["chr"].to_numpy()[left],
+        "x1": anchors["start"].to_numpy()[left], "x2": anchors["end"].to_numpy()[left],
+        "y1": anchors["start"].to_numpy()[right], "y2": anchors["end"].to_numpy()[right],
+    })
+
+
+def draw_n2_negatives(c_loops: pd.DataFrame, n_negatives: int, top_up: bool, random_state: int,
                       cond: str) -> pd.DataFrame:
-    """Mode n2: draw condition C's negatives as random new pairs of C's own anchors (see module docstring)."""
+    """Mode n2: draw condition C's negatives as random new pairs of C's own anchors (see module docstring).
+
+    Args:
+        n_negatives: pairs drawn in the first round.
+        top_up: redraw, from the pairs not drawn yet, as many pairs as the rectangle
+            filter dropped, until exactly n_negatives negatives remain. Without it
+            the result has n_negatives minus the dropped pairs.
+    """
     anchors = condition_anchors(c_loops)
     left, right = candidate_anchor_pairs(anchors)
 
@@ -227,43 +248,57 @@ def draw_n2_negatives(c_loops: pd.DataFrame, neg_pos_ratio: float, random_state:
                       pos_left.astype(np.int64) * n + pos_right)
     left, right = left[~is_loop], right[~is_loop]
 
-    # Uniform draw without replacement: pandas DataFrame.sample(random_state=int)
-    # draws exactly this way (legacy RandomState.choice).
-    n_draw = int(neg_pos_ratio * len(c_loops))
-    if n_draw > len(left):
-        raise ValueError(f"{cond}: {n_draw} n2 negatives requested but only {len(left)} anchor pairs exist")
-    drawn = np.sort(np.random.RandomState(random_state).choice(len(left), size=n_draw, replace=False))
-    left, right = left[drawn], right[drawn]
-
-    negatives = pd.DataFrame({
-        "chr": anchors["chr"].to_numpy()[left],
-        "x1": anchors["start"].to_numpy()[left], "x2": anchors["end"].to_numpy()[left],
-        "y1": anchors["start"].to_numpy()[right], "y2": anchors["end"].to_numpy()[right],
-    })
-    negatives["loop_id"] = [f"tmp{i}" for i in range(len(negatives))]
-    overlapping = negatives["loop_id"].isin(loops_overlapping_condition(negatives, c_loops))
-    negatives = negatives.loc[~overlapping].drop(columns="loop_id").reset_index(drop=True)
-
     logger.info(f"  {cond}: {n} distinct anchors -> {len(is_loop)} non-overlapping pairs, "
-                f"{int(is_loop.sum())} of them real loops (dropped) -> drew {n_draw} "
-                f"(ratio {neg_pos_ratio}) -> {int(overlapping.sum())} overlap a {cond} loop "
-                f"rectangle (dropped) -> {len(negatives)} negatives")
+                f"{int(is_loop.sum())} of them real loops (dropped)")
+
+    # Uniform draw without replacement: pandas DataFrame.sample(random_state=int)
+    # draws exactly this way (legacy RandomState.choice). Later rounds draw from the
+    # pairs no earlier round drew.
+    rng = np.random.RandomState(random_state)
+    not_drawn = np.ones(len(left), dtype=bool)
+    kept, n_draw, round_number = [], n_negatives, 1
+    while n_draw > 0:
+        pool = np.flatnonzero(not_drawn)
+        if n_draw > len(pool):
+            raise ValueError(f"{cond}: {n_draw} more n2 negatives needed but only {len(pool)} anchor pairs are left")
+        drawn = np.sort(pool[rng.choice(len(pool), size=n_draw, replace=False)])
+        not_drawn[drawn] = False
+
+        pairs = anchor_pairs_frame(anchors, left[drawn], right[drawn])
+        pairs["loop_id"] = [f"tmp{i}" for i in range(len(pairs))]
+        overlapping = pairs["loop_id"].isin(loops_overlapping_condition(pairs, c_loops)).to_numpy()
+        kept.append(drawn[~overlapping])
+        logger.info(f"  {cond}: round {round_number} drew {n_draw} -> {int(overlapping.sum())} overlap a "
+                    f"{cond} loop rectangle (dropped)")
+
+        n_draw = int(overlapping.sum()) if top_up else 0
+        round_number += 1
+
+    kept = np.sort(np.concatenate(kept))
+    negatives = anchor_pairs_frame(anchors, left[kept], right[kept])
+    logger.info(f"  {cond}: {len(negatives)} negatives")
 
     return negatives
 
 
-def label_n2(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame],
-             neg_pos_ratio: dict[str, float], random_state: int) -> pd.DataFrame:
+def label_n2(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame], neg_pos_ratio: dict[str, float] | None,
+             num_neg_loops: dict[str, int] | None, random_state: int) -> pd.DataFrame:
     """Mode n2: label each real loop for its own condition only and append every condition's n2 negatives.
 
-    neg_pos_ratio maps each condition to its number of negatives drawn per positive.
+    Exactly one of neg_pos_ratio (condition -> negatives drawn per positive, before the
+    rectangle filter) and num_neg_loops (condition -> final number of negatives,
+    topped up after the filter) is given.
     """
     for cond in CONDITIONS:
         loops[f"label_{cond}"] = np.where(loops["source"] == cond, 1.0, np.nan)
 
     blocks = [loops]
     for cond in CONDITIONS:
-        negatives = draw_n2_negatives(per_cond[cond], neg_pos_ratio[cond], random_state, cond)
+        if num_neg_loops is not None:
+            negatives = draw_n2_negatives(per_cond[cond], num_neg_loops[cond], True, random_state, cond)
+        else:
+            n_draw = int(neg_pos_ratio[cond] * len(per_cond[cond]))
+            negatives = draw_n2_negatives(per_cond[cond], n_draw, False, random_state, cond)
         negatives["source"] = f"n2_{cond}"
         for c in CONDITIONS:
             negatives[f"label_{c}"] = 0.0 if c == cond else np.nan
@@ -283,10 +318,12 @@ def label_n2(loops: pd.DataFrame, per_cond: dict[str, pd.DataFrame],
 
 
 def build_loop_sets(raw_dir: Path, negatives: str = "other_conditions",
-                    neg_pos_ratio: dict[str, float] | None = None, random_state: int = 42) -> pd.DataFrame:
+                    neg_pos_ratio: dict[str, float] | None = None, num_neg_loops: dict[str, int] | None = None,
+                    random_state: int = 42) -> pd.DataFrame:
     """Pool the three conditions' native loops and label each per condition with the chosen negatives mode.
 
-    neg_pos_ratio (condition -> negatives per positive) is required for n2 and unused otherwise.
+    n2 needs exactly one of neg_pos_ratio (condition -> negatives per positive) and
+    num_neg_loops (condition -> number of negatives); both are unused otherwise.
     """
     per_cond = {c: read_loop_bed(raw_dir / f"{c}_loop.bed.gz") for c in CONDITIONS}
 
@@ -296,9 +333,9 @@ def build_loop_sets(raw_dir: Path, negatives: str = "other_conditions",
 
     logger.info(f"Negatives: {negatives}")
     if negatives == "n2":
-        if neg_pos_ratio is None:
-            raise ValueError("--negatives n2 needs --neg_pos_ratio for every condition")
-        loops = label_n2(loops, per_cond, neg_pos_ratio, random_state)
+        if (neg_pos_ratio is None) == (num_neg_loops is None):
+            raise ValueError("--negatives n2 needs exactly one of --neg_pos_ratio and --num_neg_loops")
+        loops = label_n2(loops, per_cond, neg_pos_ratio, num_neg_loops, random_state)
     else:
         loops = label_other_conditions(loops, per_cond)
 
@@ -310,19 +347,19 @@ def build_loop_sets(raw_dir: Path, negatives: str = "other_conditions",
                   *(f"label_{c}" for c in CONDITIONS)]]
 
 
-def parse_ratios(values: list[str] | None) -> dict[str, float] | None:
-    """Parse "condition=ratio" arguments into a mapping that covers every condition."""
+def parse_condition_values(values: list[str] | None, option: str, cast: type) -> dict | None:
+    """Parse "condition=value" arguments of `option` into a mapping that covers every condition."""
     if values is None:
         return None
 
-    ratios = {}
+    parsed = {}
     for value in values:
-        cond, _, ratio = value.partition("=")
-        ratios[cond] = float(ratio)
+        cond, _, number = value.partition("=")
+        parsed[cond] = cast(number)
 
-    if set(ratios) != set(CONDITIONS):
-        raise ValueError(f"--neg_pos_ratio needs exactly the conditions {CONDITIONS}, got {sorted(ratios)}")
-    return ratios
+    if set(parsed) != set(CONDITIONS):
+        raise ValueError(f"{option} needs exactly the conditions {CONDITIONS}, got {sorted(parsed)}")
+    return parsed
 
 
 def main() -> None:
@@ -332,13 +369,19 @@ def main() -> None:
     parser.add_argument("--neg_pos_ratio", nargs="+", default=None, metavar="CONDITION=RATIO",
                         help="n2 only: negatives drawn per positive for each condition "
                              "(before the rectangle-overlap filter), e.g. fetal=1.57 glia=1.51 neuron=1.32.")
+    parser.add_argument("--num_neg_loops", nargs="+", default=None, metavar="CONDITION=N",
+                        help="n2 only, instead of --neg_pos_ratio: final number of negatives for each "
+                             "condition; pairs dropped by the rectangle-overlap filter are redrawn.")
     parser.add_argument("--random_state", type=int, default=42, help="n2 only: seed of the negative draw.")
     parser.add_argument("--output", type=Path, default=Path("data/human_prototype/interim/other_conditions/loop_universe.tsv"))
     parser.add_argument("--log_path", type=Path, default=Path("logs/human_prototype/other_conditions/build_loop_universe.log"))
     args = parser.parse_args()
 
     configure_logging(args.log_path)
-    loops = build_loop_sets(args.raw_dir, args.negatives, parse_ratios(args.neg_pos_ratio), args.random_state)
+    loops = build_loop_sets(args.raw_dir, args.negatives,
+                            parse_condition_values(args.neg_pos_ratio, "--neg_pos_ratio", float),
+                            parse_condition_values(args.num_neg_loops, "--num_neg_loops", int),
+                            args.random_state)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     loops.to_csv(args.output, sep="\t", index=False)

@@ -100,6 +100,13 @@ rule download_genome:
 # consumes it as an existing input (Snakemake errors clearly if it is absent).
 
 
+def n2_count_args():
+    """n2 negative-count arguments: --num_neg_loops when set in config, else --neg_pos_ratio."""
+    if config.get("num_neg_loops"):
+        return "--num_neg_loops " + " ".join(f"{cond}={n}" for cond, n in config["num_neg_loops"].items())
+    return "--neg_pos_ratio " + " ".join(f"{cond}={ratio}" for cond, ratio in config["neg_pos_ratio"].items())
+
+
 # Per-condition Rahman loop sets (positives + negatives drawn by the {negatives}
 # mode), one table with a label column per condition; built once per mode.
 rule build_loop_universe:
@@ -112,9 +119,7 @@ rule build_loop_universe:
     params:
         # Only n2 draws at random, so only n2 reruns when these change.
         n2_args=lambda wildcards: (
-            "--neg_pos_ratio "
-            + " ".join(f"{cond}={ratio}" for cond, ratio in config["neg_pos_ratio"].items())
-            + f" --random_state {config['random_state']}"
+            n2_count_args() + f" --random_state {config['random_state']}"
             if wildcards.negatives == "n2" else ""
         ),
     log:

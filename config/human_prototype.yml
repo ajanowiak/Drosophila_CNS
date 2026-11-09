@@ -39,7 +39,8 @@ conditions:
 #                      no real loop of the condition (pairToPair -type both); parameter-free.
 #   n2               - Cupriak's new_pairs_of_anchors: random new pairs of the condition's
 #                      own anchors, neg_pos_ratio[condition] per positive (minus the few that
-#                      overlap a real loop rectangle), drawn with random_state.
+#                      overlap a real loop rectangle) or exactly num_neg_loops[condition],
+#                      drawn with random_state.
 negatives:
   - "other_conditions"
   - "n2"
@@ -52,6 +53,14 @@ neg_pos_ratio:
   fetal: 1.56983
   glia: 1.513752
   neuron: 1.315195
+# n2 only, replaces neg_pos_ratio when set: the final number of negatives per
+# condition. Pairs dropped by the rectangle filter are redrawn until the count is
+# reached, so n2 ends with exactly other_conditions' negative counts (above).
+# null = use neg_pos_ratio.
+num_neg_loops:
+  fetal: 41230
+  glia: 41389
+  neuron: 37583
 random_state: 42          # n2 only (Cupriak's random_state)
 
 # Stage 0 feature sets; every listed set is built and trained for every negative mode.
