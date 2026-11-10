@@ -28,3 +28,15 @@ pfc:
     QY_1468: {gsm: "GSM7822196", region: "A25",     donor: "Donor 1"}
     QY_1470: {gsm: "GSM7822197", region: "A25",     donor: "Donor 2"}
     MM_837:  {gsm: "GSM7822198", region: "A25",     donor: "Donor 4"}
+  # Pooled-cell models (src/snakemake/human_prototype/pfc_pools.smk): Stage 0 and
+  # Stage 1 on the analysis cells of several libraries pooled. chromVAR scores stay
+  # per library (each library's own peaks and background); pooling adds up each loop's
+  # "1-1" / other chromVAR sums and cell counts over the libraries.
+  pools:
+    # donor 4 is left out (almost no neurons)
+    libraries: ["MM_417", "MM_418", "XH_496", "MM_436", "QY_1468", "QY_1470"]
+    # feature set -> attribute of pfc.libraries that splits the pooled libraries into
+    # groups, each pooled separately (one feature per motif x group); null = one pool.
+    feature_sets:
+      motif_x_region: "region"   # model (a): one pool per brain region, donors together
+      motif_pooled: null         # model (b): every cell in one pool
