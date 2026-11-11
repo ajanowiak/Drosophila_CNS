@@ -33,10 +33,19 @@ pfc:
   # per library (each library's own peaks and background); pooling adds up each loop's
   # "1-1" / other chromVAR sums and cell counts over the libraries.
   pools:
-    # donor 4 is left out (almost no neurons)
-    libraries: ["MM_417", "MM_418", "XH_496", "MM_436", "QY_1468", "QY_1470"]
-    # feature set -> attribute of pfc.libraries that splits the pooled libraries into
-    # groups, each pooled separately (one feature per motif x group); null = one pool.
+    # named lists of the libraries a feature set pools
+    library_sets:
+      # donor 4 is left out (almost no neurons)
+      no_donor4: ["MM_417", "MM_418", "XH_496", "MM_436", "QY_1468", "QY_1470"]
+      all_donors: ["MM_417", "MM_418", "MM_841", "XH_496", "MM_436", "MM_863", "QY_1468", "QY_1470", "MM_837"]
+    # feature set -> the library set it pools, and the attribute of pfc.libraries that
+    # splits those libraries into groups, each pooled separately (one feature per
+    # motif x group); group_by null = one pool.
     feature_sets:
-      motif_x_region: "region"   # model (a): one pool per brain region, donors together
-      motif_pooled: null         # model (b): every cell in one pool
+      # model (a): one pool per brain region, donors together
+      motif_x_region:            {libraries: "no_donor4",  group_by: "region"}
+      # model (b): every cell in one pool
+      motif_pooled:              {libraries: "no_donor4",  group_by: null}
+      # models (a) and (b) with donor 4 included
+      motif_x_region_all_donors: {libraries: "all_donors", group_by: "region"}
+      motif_pooled_all_donors:   {libraries: "all_donors", group_by: null}

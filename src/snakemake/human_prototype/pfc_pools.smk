@@ -5,7 +5,8 @@
 # cells (library_loop_sums). Pooled Stage 0 adds them up over the libraries of a
 # pool, which gives exactly the enrichment of their cells taken together:
 #   motif_x_region - model (a): one pool per brain region, one feature per motif x region;
-#   motif_pooled   - model (b): all libraries in one pool, one feature per motif.
+#   motif_pooled   - model (b): all libraries in one pool, one feature per motif;
+#   *_all_donors   - the same with donor 4's libraries included.
 # Every feature set is trained with the main pipeline's Stage 1 (XGB, CV), one job
 # per condition.
 #
@@ -20,8 +21,9 @@ configfile: "config/human_pfc_libraries.yml"
 PFC = config["pfc"]
 POOLS = PFC["pools"]
 NEGATIVES = PFC["negatives"]
-POOL_LIBRARIES = list(POOLS["libraries"])
 FEATURE_SETS = list(POOLS["feature_sets"])
+# every library some feature set pools; each gets its loop sums once
+POOL_LIBRARIES = sorted({library for libraries in POOLS["library_sets"].values() for library in libraries})
 
 LOOP_TABLE = f"data/human_prototype/interim/{NEGATIVES}/loop_universe.tsv"
 LIBRARY_INTERIM = "data/human_prototype/interim/libraries/{library}"
@@ -34,12 +36,18 @@ wildcard_constraints:
     condition="|".join(config["conditions"]),
 
 
+def pooled_libraries(features):
+    """Libraries a feature set pools, in config order."""
+    return POOLS["library_sets"][POOLS["feature_sets"][features]["libraries"]]
+
+
 def pool_groups(wildcards):
     """--groups argument of a feature set: each pooled library's group, or nothing for one pool."""
-    attribute = POOLS["feature_sets"][wildcards.features]
+    attribute = POOLS["feature_sets"][wildcards.features]["group_by"]
     if attribute is None:
         return ""
-    return "--groups " + " ".join(PFC["libraries"][library][attribute] for library in POOL_LIBRARIES)
+    return "--groups " + " ".join(PFC["libraries"][library][attribute]
+                                  for library in pooled_libraries(wildcards.features))
 
 
 rule pools:
@@ -75,7 +83,7 @@ rule library_loop_sums:
 # Motif enrichment of the pooled libraries' cells (models a and b).
 rule pool_stage0:
     input:
-        sums=expand(LOOP_SUMS, library=POOL_LIBRARIES),
+        sums=lambda wildcards: expand(LOOP_SUMS, library=pooled_libraries(wildcards.features)),
         loop_table=LOOP_TABLE,
     output:
         enrichment=f"{POOL_RESULTS}/prepare_data/{{features}}/motif_enrichment.csv",
