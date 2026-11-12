@@ -8,7 +8,9 @@ Both means are a sum divided by a count, and sums and counts add up over cells,
 so the enrichment of cells pooled from several libraries follows exactly from each
 library's sums and counts (run_stage0_pooled.py). This script computes them for one
 library, with the same activity codes and NaN rule as run_stage0_human.py; chromVAR
-scores stay those of the library's own run (its own peaks and background). It also
+scores stay those of the library's own run (its own peaks and background). With
+--group the sums cover only the library's cells of one group of a cell partition
+(e.g. one cell class), so groups can be pooled over libraries separately. It also
 counts each loop's cells with the left and with the right anchor open, which pool
 the same way (not used by the pooled Stage 0).
 
@@ -17,6 +19,7 @@ Prototype step of the pooled-cell models (pfc_pools.smk).
 Inputs:
   - anchor_openness.tsv and motifs_chromvar.tsv of one library
   - <negatives>/loop_universe.tsv
+  - with --group: the library's cell_metadata.tsv (barcode -> group)
 Outputs:
   - loop_sums.npz: loop_ids, motifs, n_cells, and per loop (rows in loop_ids order)
     sum_11 and sum_other (loop x motif), count_11, open_left, open_right
@@ -31,7 +34,7 @@ import pandas as pd
 
 from core.log import configure_logging
 from human_prepare_data.anchor_openness import loop_activity
-from human_prepare_data.run_stage0_human import align_cells
+from human_prepare_data.run_stage0_human import align_cells, load_cell_groups
 from prepare_data.compute_motif_enrichment import masked_sums
 
 logger = logging.getLogger(__name__)
@@ -39,10 +42,26 @@ logger = logging.getLogger(__name__)
 INDEX_COLUMNS = ["chr", "start", "end"]
 
 
-def load_openness(path: Path) -> pd.DataFrame:
-    """Anchor x cell 0/1 matrix, read as uint8 to keep memory at one byte per entry."""
-    cells = pd.read_csv(path, sep="\t", nrows=0).columns.drop(INDEX_COLUMNS)
-    return pd.read_csv(path, sep="\t", index_col=INDEX_COLUMNS, dtype={cell: np.uint8 for cell in cells})
+def openness_cells(path: Path) -> pd.Index:
+    """Cell barcodes in the header of the anchor-openness matrix."""
+    return pd.read_csv(path, sep="\t", nrows=0).columns.drop(INDEX_COLUMNS)
+
+
+def load_openness(path: Path, cells: pd.Index) -> pd.DataFrame:
+    """Anchor x cell 0/1 matrix of the given cells, read as uint8 to keep memory at one byte per entry."""
+    return pd.read_csv(path, sep="\t", index_col=INDEX_COLUMNS, usecols=INDEX_COLUMNS + list(cells),
+                       dtype={cell: np.uint8 for cell in cells})
+
+
+def group_cells(metadata_path: Path, group_column: str, group: str, cells: pd.Index) -> pd.Index:
+    """The cells among `cells` that belong to one group of the partition."""
+    groups = load_cell_groups(metadata_path, group_column, cells)
+    members = groups.index[groups == group]
+    if len(members) == 0:
+        raise ValueError(f"no cells of '{group_column}' group {group!r} in {metadata_path}")
+
+    logger.info(f"Keeping the {len(members)} cells of {group_column} {group!r}")
+    return members
 
 
 def loop_motif_sums(activity: np.ndarray, motifs_df: pd.DataFrame,
@@ -83,13 +102,25 @@ def main() -> None:
     parser.add_argument("--anchor_openness", type=Path, required=True)
     parser.add_argument("--motifs", type=Path, required=True)
     parser.add_argument("--loop_table", type=Path, required=True)
+    parser.add_argument("--cell_metadata", type=Path, default=None,
+                        help="With --group: TSV with a barcode column and --group_column.")
+    parser.add_argument("--group_column", default=None, help="Column of --cell_metadata that partitions the cells.")
+    parser.add_argument("--group", default=None, help="Sum over this group's cells only (needs the two above).")
     parser.add_argument("--chunk_size", type=int, default=4096, help="Loops per matrix product.")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--log_path", type=Path, required=True)
     args = parser.parse_args()
 
+    group_args = [args.cell_metadata, args.group_column, args.group]
+    if any(value is not None for value in group_args) and None in group_args:
+        parser.error("--cell_metadata, --group_column and --group go together")
+
     configure_logging(args.log_path)
-    openness_df = load_openness(args.anchor_openness)
+    cells = openness_cells(args.anchor_openness)
+    if args.group is not None:
+        cells = group_cells(args.cell_metadata, args.group_column, args.group, cells)
+
+    openness_df = load_openness(args.anchor_openness, cells)
     motifs_df = pd.read_csv(args.motifs, sep="\t", index_col=0)
     loop_table = pd.read_csv(args.loop_table, sep="\t")
 

@@ -38,14 +38,21 @@ pfc:
       # donor 4 is left out (almost no neurons)
       no_donor4: ["MM_417", "MM_418", "XH_496", "MM_436", "QY_1468", "QY_1470"]
       all_donors: ["MM_417", "MM_418", "MM_841", "XH_496", "MM_436", "MM_863", "QY_1468", "QY_1470", "MM_837"]
-    # feature set -> the library set it pools, and the attribute of pfc.libraries that
-    # splits those libraries into groups, each pooled separately (one feature per
-    # motif x group); group_by null = one pool.
+    # cell classes of the cellclass_feature_set column (cell_metadata.tsv of each
+    # library); a feature set grouped by cell class pools each class separately
+    cellclasses: ["GABA", "GLUT", "NonN"]
+    # feature set -> the library set it pools, and what splits its cells into groups,
+    # each pooled separately (one feature per motif x group). group_by lists attributes
+    # of pfc.libraries (e.g. region) and/or the cell-class column, which splits each
+    # library's cells; a group is one combination of their values. [] = one pool.
     feature_sets:
       # model (a): one pool per brain region, donors together
-      motif_x_region:            {libraries: "no_donor4",  group_by: "region"}
+      motif_x_region:            {libraries: "no_donor4",  group_by: ["region"]}
       # model (b): every cell in one pool
-      motif_pooled:              {libraries: "no_donor4",  group_by: null}
+      motif_pooled:              {libraries: "no_donor4",  group_by: []}
       # models (a) and (b) with donor 4 included
-      motif_x_region_all_donors: {libraries: "all_donors", group_by: "region"}
-      motif_pooled_all_donors:   {libraries: "all_donors", group_by: null}
+      motif_x_region_all_donors: {libraries: "all_donors", group_by: ["region"]}
+      motif_pooled_all_donors:   {libraries: "all_donors", group_by: []}
+      # all donors, one pool per cell class, and per brain region x cell class
+      motif_x_cellclass_all_donors:          {libraries: "all_donors", group_by: ["cellclass"]}
+      motif_x_region_x_cellclass_all_donors: {libraries: "all_donors", group_by: ["region", "cellclass"]}
